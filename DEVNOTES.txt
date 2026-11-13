@@ -5,7 +5,8 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: none yet (design phase)
+Current version: v1 (Nov 12, 2026)
+Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
 WHAT HEXWOOD IS
@@ -147,6 +148,66 @@ TECH / PROCESS
   - Don't build/package after every change. Collect notes and changes,
     then build and package once at the end.
 
+WHAT'S BUILT (v1)
+-----------------
+Files: index.html (page + styles), js/data.js (items, spells, recipes, maps,
+       objects, creatures), js/game.js (engine, rules, drawing, menus),
+       manifest.json (add-to-home-screen).
+Controls: touch anywhere and slide to walk. A purple button appears near
+          things you can use. Top-left: Spellbook, Satchel, Pouch, Journal.
+          (Keyboard on a computer: arrows/WASD, Space to act.)
+Save: automatic, in the browser. Title screen has Continue / New Game.
+
+The hut opening (all in):
+  1. Wake up in the gray hut. Step stool under the bed -> reach the jar on
+     the high shelf -> free FENNEL the fairy. Hut goes splotchy color.
+  2. Fennel's requests (each earns a hint): honeycake crumb (cupboard),
+     thimble of dew (windowsill), shiny button (sewing basket).
+  3. Bureau dial lock: "From high to low, as light falls." Marks: moon on
+     the high shelf, gold leaf in the painting, acorn on the rug.
+     Answer: moon, leaf, acorn. Inside: Spellbook + first Wisp Feather.
+  4. WRITE: ash (hearth) + berry ink (grind inkberries at the mortar) +
+     goose quill (vase) at the workbench -> Write Powder. Cast from the
+     Pouch, costs a Wisp Feather -> writes the LIGHT formula. Hut goes
+     full color.
+  5. LIGHT: candle stub (nightstand) + sunstone (clock pendulum) at the
+     workbench -> Dim Orb -> Fennel enchants -> Light Orb (3 charges).
+  6. Roll back the lumpy rug -> trapdoor -> dark cellar. With Light: door
+     key on a hook, Wisp Feather in a crate.
+  7. Unlock the door, go outside.
+
+Outdoors (6 zones, each gray until restored):
+  Hut Yard, Sunny Meadow, Willow Brook: free every hexed creature.
+  Birch Grove: dark. Kindle its 3 lanterns while Light glows (this adds a
+               new effect to the Light page automatically).
+  The Old Stones: find the hidden Moon Pebble with the Seeker Orb.
+  Chipmunk Hollow: secret, see the chain below.
+SEEKER ORB: second Write (cellar feather) writes it. Shimmer petal (freed
+  meadow butterfly, or the shimmering flower) ground at the mortar + river
+  glass (brook bank) -> Clear Orb -> Fennel enchants. Standing still, it
+  sweeps ~3.5 squares and reveals secrets. Secrets always shimmer.
+Recharge orbs at the hut hearth.
+Bunny (meadow) leads you to a Tiny Bell after being freed.
+SECRET CHAIN: free all 6 chipmunks (yard, meadow x2, brook, grove,
+  stones). No hint until the 6th. Then: chime, they gather around you, a
+  note drifts down with a clue (saved in the Journal), they lead you to
+  three leaning birches and vanish into the hedge. Seeker reveals the gap.
+  Inside: Golden Acorn curio + Wisp Feather. Clue checks off when done.
+Curios (Journal): Moon Pebble, Golden Acorn, Tiny Bell, Glass Marble
+  (hidden in the yard).
+A third Write casts but shows "more spells coming next version" (powder
+  and feather are not used up).
+
+
+NEXT UP (v2 ideas)
+------------------
+  - The critter village (freed creatures move in; rebuild with materials)
+  - More rooms toward ~12, second secret chain
+  - Craftable waystations, gear (bags, shoes, gloves), chests
+  - Cube spells (permanent enchantments), Seeker upgrades 3 -> 6 -> 9
+  - Teleport-to-hut / return-marker spell
+  - Art pass session
+
 
 OPEN QUESTIONS
 --------------
@@ -165,7 +226,8 @@ SESSION LOG
             scope, and the name Hexwood. No code yet.
             Later that night: designed the hut opening, fairy coach, Write
             spell, spell shapes, Seeker Orb, recharging/waystations,
-            containers and gear. Started building v1.
+            containers and gear. Built v1 (hut opening + 6 outdoor zones,
+            Write/Light/Seeker, chipmunk chain, Clue Journal, autosave).
 
 
 TODD'S NOTES

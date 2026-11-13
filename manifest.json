@@ -1,0 +1,9 @@
+{
+  "name": "Hexwood",
+  "short_name": "Hexwood",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#1d1a24",
+  "theme_color": "#2a2438"
+}
