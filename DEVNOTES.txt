@@ -68,6 +68,66 @@ The Village:
   - Materials gathered while exploring are used to rebuild.
 
 
+THE OPENING: THE HUT
+--------------------
+  - Start inside a small hut. The hut is GRAY. Solving its puzzles brings it to
+    full color (a two-step "splotchy" reveal is OK; once complete, fully colored).
+  - A trapped fairy is in the hut. Freeing her is one of the first puzzles.
+    She becomes the COACH: she asks for something out of her reach; handing it
+    to her earns a hint about the next step. She also ENCHANTS ingredients.
+  - A few short puzzles unlock a drawer/bureau holding the SPELLBOOK.
+  - Spellbook page 1 lists ingredients for the first spell: WRITE.
+  - Gather in the hut, assemble at the workbench, cast Write.
+  - Casting Write writes the formula for spell #2.
+  - After casting Write for spell #2, a puzzle/challenge leads to the KEY for
+    the hut door. Then outside to explore and collect.
+
+
+SPELL SYSTEM
+------------
+Loop: discover formula -> search for ingredients -> work them (grind, refine,
+      polish, ask a fairy or nymph to enchant, etc.) -> cast.
+  - WRITE: the first spell. Casting it costs a WISP FEATHER (somewhat rare) and
+    writes the formula for the next spell into the book.
+    Never more than 2-3 written-but-uncast formulas at a time. No stockpiling.
+  - Wisp feathers are a typical secret-chain reward.
+  - When a spell is first cast, its NAME is revealed and its first effects are
+    written into the book (e.g. "makes light", "warms what the red circle rests
+    on for 5 seconds").
+  - Newly discovered effects are added to the spellbook AUTOMATICALLY. Recasting
+    means going back to the book for the formula, so you notice the new notes.
+
+Spell shapes MEAN something (at least 3 kinds, maybe more later):
+  - Powder  = single use. Pull from the pouch, works once, gone.
+  - Orb     = charged. Works N times, then needs a recharge.
+  - Cube    = permanent enchantment cast on an object (e.g. Fire on the furnace:
+              from then on, adding a few ingredients always makes fire for
+              metal-working).
+
+SEEKER ORB (secret finder):
+  - Pull it out: you can't walk, but you turn in a circle where you stand and
+    expose secret items/places within a few squares.
+  - Secrets always have a TELL (shimmer, glow, a critter vanishing into a
+    solid-looking place) so there's no "2 steps, orb, 2 steps, orb" habit.
+  - 3 uses per charge. Upgrades: 3 -> 6 -> 9 and on, so you can range further.
+
+RECHARGING:
+  - Everything recharges at the hut.
+  - Craftable WAYSTATIONS recharge some (not all) spells. Each waystation has its
+    own set (the swamp one does these, the rocky-hillock one does others).
+  - Idea from another game: a two-part TELEPORT spell. Cast "to hut" deep in the
+    woods; it leaves a return marker. Do your things at the hut, then cast
+    "return" to zap back to the marker.
+
+
+CONTAINERS AND GEAR
+-------------------
+  - INGREDIENT SATCHEL: raw materials (feathers, jewels, ash...).
+  - SPELL POUCH: finished spell items, ready to use.
+  - Craftable gear: bags, pouches, better shoes, gloves with specific abilities,
+    and the like. Gear can also be found in CHESTS.
+
+
 FIRST PHASE (first playable)
 ----------------------------
   - The critter village
@@ -103,6 +163,9 @@ SESSION LOG
 2026-11-12  Design session. Chose concept, hero, controls, setting, creature
             un-hexing, secret chains, Clue Journal, critter village, first-phase
             scope, and the name Hexwood. No code yet.
+            Later that night: designed the hut opening, fairy coach, Write
+            spell, spell shapes, Seeker Orb, recharging/waystations,
+            containers and gear. Started building v1.
 
 
 TODD'S NOTES
