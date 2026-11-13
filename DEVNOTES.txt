@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v1 (Nov 12, 2026)
+Current version: v2 (Nov 13, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -151,10 +151,12 @@ TECH / PROCESS
 WHAT'S BUILT (v1)
 -----------------
 Files: index.html (page + styles), js/data.js (items, spells, recipes, maps,
-       objects, creatures), js/game.js (engine, rules, drawing, menus),
-       manifest.json (add-to-home-screen).
-Controls: touch anywhere and slide to walk. A purple button appears near
-          things you can use. Top-left: Spellbook, Satchel, Pouch, Journal.
+       objects, creatures), js/art.js (painted trees/bushes/hedges),
+       js/game.js (engine, rules, drawing, menus), manifest.json + sw.js +
+       icons/ (install as an app).
+Controls: touch anywhere and slide to walk. Things close enough to use GLOW
+          with a small label; tap the thing (or its label) to use it.
+          Top-left: Spellbook, Satchel, Pouch, Journal (pink dot = new).
           (Keyboard on a computer: arrows/WASD, Space to act.)
 Save: automatic, in the browser. Title screen has Continue / New Game.
 
@@ -173,8 +175,9 @@ The hut opening (all in):
   5. LIGHT: candle stub (nightstand) + sunstone (clock pendulum) at the
      workbench -> Dim Orb -> Fennel enchants -> Light Orb (3 charges).
   6. Roll back the lumpy rug -> trapdoor -> dark cellar. With Light: door
-     key on a hook, Wisp Feather in a crate.
-  7. Unlock the door, go outside.
+     key on a hook, Wisp Feather in a crate, wildflower HONEY in the jars.
+  7. Give Fennel the honey -> she teaches the UN-HEX TOUCH (needed to free
+     creatures). Unlock the door, go outside.
 
 Outdoors (6 zones, each gray until restored):
   Hut Yard, Sunny Meadow, Willow Brook: free every hexed creature.
@@ -198,8 +201,36 @@ Curios (Journal): Moon Pebble, Golden Acorn, Tiny Bell, Glass Marble
 A third Write casts but shows "more spells coming next version" (powder
   and feather are not used up).
 
+v2 CHANGES (from Todd's play notes, Nov 13)
+------------------------------------------
+  - Tap-the-thing: nearby usable things glow with a label; no more action
+    button under the thumb. Standing between mortar and workbench, both glow.
+  - Big moments (spell learned, chain done, new clue, curio) are banners that
+    don't block walking. Full text lives in the Spellbook / Journal with NEW
+    tags, pink dots on the icons, and "Recent happenings" in the Journal.
+  - Dialog boxes sit at the TOP of the screen and ignore taps for a moment.
+  - Fennel: hints are location-aware (closest useful next step, never a
+    step already done). Enchanting costs 1 KINDNESS. Treats add kindness:
+    honeycake, dew, button, honey, inkberries, wild strawberries (meadow
+    patch). She remembers kindness given ahead of time.
+  - Fennel teaches un-hexing in exchange for the cellar honey.
+  - RUNE CIRCLE beside the hut: stand on it and Fennel flies out to follow
+    you; tap her to talk or enchant. She goes home when you go inside.
+  - Workbench / mortar / enchant screens show the Spellbook formula. The
+    workbench offers "Grind at the mortar" when a ground ingredient is
+    missing and you have the raw one, then brings you back.
+  - Art: painted style (Todd chose B). Trees: oak, pine, birch, willow (by
+    the brook), dead. Bushes: round, flowering, berry, fern. Hedge blocks
+    join into rows. Painted rocks, standing stones, timber-frame hut.
+    Gray-to-color now blooms in larger patches.
+  - Install: icons + service worker, so Chrome offers "Install".
 
-NEXT UP (v2 ideas)
+IDEAS PARKED
+------------
+  - Orbs may shatter after many recharges (age/use) -> needs replacing.
+
+
+NEXT UP
 ------------------
   - The critter village (freed creatures move in; rebuild with materials)
   - More rooms toward ~12, second secret chain
@@ -228,6 +259,9 @@ SESSION LOG
             spell, spell shapes, Seeker Orb, recharging/waystations,
             containers and gear. Built v1 (hut opening + 6 outdoor zones,
             Write/Light/Seeker, chipmunk chain, Clue Journal, autosave).
+2026-11-13  Todd's v1 play notes -> v2: tap-the-thing, non-blocking
+            notices, smarter Fennel with kindness + rune circle, un-hex as
+            Fennel's gift, crafting shows formulas, painted art, install.
 
 
 TODD'S NOTES

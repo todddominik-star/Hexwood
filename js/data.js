@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v1';
+const VERSION = 'v2';
 
 // ---------------------------------------------------------------- items
 const ITEMS = {
@@ -18,9 +18,11 @@ const ITEMS = {
   petaldust:  { name: 'Petal Dust',    icon: '💮', kind: 'worked',     desc: 'Ground shimmer petal. It twinkles.' },
   dimorb:     { name: 'Dim Orb',       icon: '🟠', kind: 'worked',     desc: 'Candle and sunstone, joined. Waiting to be enchanted.' },
   clearorb:   { name: 'Clear Orb',     icon: '⚪', kind: 'worked',     desc: 'River glass dusted with petal. Waiting to be enchanted.' },
-  honeycake:  { name: 'Honeycake Crumb', icon: '🍯', kind: 'trinket',  desc: 'Sticky and sweet. Someone small might like it.' },
+  honeycake:  { name: 'Honeycake Crumb', icon: '🍰', kind: 'trinket',  desc: 'Sticky and sweet. Someone small might like it.' },
   dew:        { name: 'Thimble of Dew',  icon: '💧', kind: 'trinket',  desc: 'Morning dew caught in a thimble.' },
   button:     { name: 'Shiny Button',    icon: '🔘', kind: 'trinket',  desc: 'A bright brass button.' },
+  honey:      { name: 'Wildflower Honey', icon: '🍯', kind: 'trinket',  desc: 'A little jar of Old Moss\'s honey.' },
+  strawberry: { name: 'Wild Strawberry',  icon: '🍓', kind: 'trinket',  desc: 'Tiny, sweet, and very red.' },
   stool:      { name: 'Step Stool',    icon: '🪑', kind: 'tool',       desc: 'For reaching high places.' },
   key:        { name: 'Door Key',      icon: '🗝️', kind: 'tool',       desc: 'An old iron key.' },
   moonpebble: { name: 'Moon Pebble',   icon: '🌙', kind: 'curio',      desc: 'A pale pebble that glows at night.' },
@@ -202,7 +204,7 @@ function buildOutdoor() {
 
   // reserved spots (objects, creatures, routes) so scatter never covers them
   [[3, 8], [14, 2], [15, 8], [9, 8], [21, 4], [35, 3], [22, 13], [33, 19], [20, 15], [26, 13], [34, 14],
-   [29, 19], [37, 12], [4, 18], [11, 12], [16, 24], [31, 28], [12, 28], [22, 23], [3, 12], [10, 19]]
+   [29, 19], [37, 12], [24, 20], [4, 18], [11, 12], [16, 24], [31, 28], [12, 28], [22, 23], [3, 12], [10, 19]]
     .forEach(([x, y]) => keep(x, y, 1));
   for (let x = 4; x <= 11; x++) keep(x, 16, 1); // hut front
 
@@ -330,7 +332,11 @@ const OBJECTS = [
   { id: 'stairs', map: 'cellar', tx: 1, ty: 1, solid: false, layer: 'floor', draw: 'stairs',
     act: () => ({ label: 'Climb up', fn: () => G.goMap('hut', 6.5, 5.6) }) },
   { id: 'jars', map: 'cellar', tx: 3, ty: 0, tw: 2, layer: 'wall', draw: 'jars',
-    act: () => ({ label: 'Look', fn: () => G.say(G.lightActive() ? ['Old jars of pickled... something. Better not.'] : ['Too dark to see.']) }) },
+    act: () => {
+      if (!G.lightActive()) return { label: 'Feel along the shelf', fn: () => G.say(['Jars, by the feel of it. Too dark to see what\'s in them.']) };
+      if (!F('honeyTaken')) return { label: 'Look at the jars', fn: () => { G.give('honey'); G.setFlag('honeyTaken'); G.say(['Old jars of pickled... something. Better not.', 'But one little jar glows gold: wildflower honey! You take it.']); } };
+      return { label: 'Look at the jars', fn: () => G.say(['Old jars of pickled... something. Better not.']) };
+    } },
   { id: 'keyhook', map: 'cellar', tx: 7, ty: 0, layer: 'wall', draw: 'keyhook', vis: () => !F('keyTaken'),
     act: () => G.lightActive()
       ? { label: 'Take the key', fn: () => { G.give('key'); G.setFlag('keyTaken'); G.setZone('cellar', 0); G.chime(1); G.say(['An old iron key hangs on a hook. It must be the hut door key!']); } }
@@ -354,6 +360,10 @@ const OBJECTS = [
     act: () => ({ label: 'Pick up the glass', fn: () => { G.give('riverglass'); G.setFlag('glassTaken'); G.say(['A smooth piece of River Glass, tumbled by the brook.']); } }) },
   { id: 'goosequill', map: 'out', tx: 31, ty: 28, solid: false, draw: 'pickup', icon: '🪶', vis: () => !F('outQuill'),
     act: () => ({ label: 'Pick up the feather', fn: () => { G.give('quill'); G.setFlag('outQuill'); G.say(['A goose quill, dropped by the brook.']); } }) },
+  { id: 'rune', map: 'out', tx: 10, ty: 15, tw: 2, th: 2, solid: false, layer: 'floor', draw: 'rune',
+    act: () => G.flag('fairyOutNow') ? null : ({ label: 'Look at the rune', fn: () => G.say(['An old rune circle set into the ground, carved with knots that loop forever.', F('fairyFree') ? 'When you stand on it, Fennel can find you.' : 'It hums very faintly.']) }) },
+  { id: 'strawpatch', map: 'out', tx: 24, ty: 20, solid: false, draw: 'strawpatch',
+    act: () => G.count('strawberry') < 3 ? { label: 'Pick a strawberry', fn: () => { G.give('strawberry'); } } : { label: 'Look', fn: () => G.say(['Wild strawberries. You have plenty for now.']) } },
   { id: 'well', map: 'out', tx: 3, ty: 12, draw: 'well',
     act: () => ({ label: 'Look in the well', fn: () => G.say(['A deep, cool well. Your reflection looks back, the only color around.']) }) },
   { id: 'bell', map: 'out', tx: 37, ty: 12, solid: false, draw: 'pickup', icon: '🔔', vis: () => F('bunnyLed') && !F('bellTaken'),

@@ -18,6 +18,9 @@ resize();
 const $ = (id) => document.getElementById(id);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const hash = (x, y) => { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); };
+const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x - xi, fy = y - yi, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+  return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
 
 // ================================================================ maps
 const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x']);
@@ -31,7 +34,7 @@ addMap('cellar', CELLAR_MAP);
 addMap('out', buildOutdoor());
 
 // ================================================================ state
-const SAVE_KEY = 'hexwood_save_v1';
+const SAVE_KEY = 'hexwood_save_v1';  // v2 keeps the same save slot
 let S = null;
 function newState() {
   return {
@@ -57,10 +60,11 @@ let fade = 0, fadeDir = 0, fadeCb = null;
 let curZone = null;
 let started = false;
 let paused = true;         // true while dialog/panel/title is up
+let fairyRT = null;        // Fennel's position when she follows you outdoors
 
 // ================================================================ G: helpers used by data.js
 const G = {
-  flag: (k) => !!S.flags[k],
+  flag: (k) => k === 'fairyOutNow' ? !!S.fairyOut : !!S.flags[k],
   setFlag(k) { S.flags[k] = true; rebuildSolids(); save(); },
   has: (k, n = 1) => (S.inv[k] || 0) >= n,
   count: (k) => S.inv[k] || 0,
@@ -81,7 +85,7 @@ const G = {
     save();
   },
   goMap(map, x, y) {
-    startFade(() => { S.map = map; S.px = x; S.py = y; curZone = null; spawnCreatures(); save(); });
+    startFade(() => { S.map = map; S.px = x; S.py = y; curZone = null; if (map !== 'out') { S.fairyOut = false; fairyRT = null; } spawnCreatures(); save(); });
   },
   freeFairy() {
     G.setFlag('fairyFree');
@@ -111,7 +115,7 @@ const G = {
   curio(id) {
     S.curios[id] = true; chime(3); save();
     const it = ITEMS[id];
-    say([`You found a curio: ${it.icon} ${it.name}!`, it.desc, '(Curios are kept in your Journal.)']);
+    notice(`${it.icon} You found a curio: ${it.name}! ${it.desc}`, 'journal');
   },
   hollowCheck() {
     if (G.flag('acornTaken') && G.flag('hollowWisp')) {
@@ -139,7 +143,7 @@ function tileGray(map, tx, ty) {
   const zg = zoneDisp[z.id] !== undefined ? zoneDisp[z.id] : 1;
   if (zg <= 0.001) return 0;
   if (zg >= 0.999) return 1;
-  const r = 1 - zg, h = hash(tx, ty);
+  const r = 1 - zg, h = vnoise(tx / 3.2, ty / 3.2) * 0.75 + hash(tx, ty) * 0.25;
   return clamp((h * 0.6 + 0.2 - r) * 4 + 0.5, 0, 1);
 }
 
@@ -222,10 +226,8 @@ function unhex(c) {
   sparkleSound();
   c.mode = 'free';
   toast(`✨ Freed a ${speciesName(d.species)}!`);
-  const lines = [];
-  if (d.reward) { G.give(d.reward.item, d.reward.n); lines.push(`The hex bursts like a bubble, and a ${speciesName(d.species)} blinks up at you.`, d.reward.text); }
-  if (d.lead) { c.mode = 'lead'; lines.push('The bunny looks back at you and hops a few steps, as if asking you to follow.'); }
-  if (lines.length) say(lines);
+  if (d.reward) { G.give(d.reward.item, d.reward.n); toast(`The ${speciesName(d.species)} blinks up at you. ${d.reward.text}`, 4000); }
+  if (d.lead) { c.mode = 'lead'; toast('🐇 The bunny looks back at you and hops a few steps, as if asking you to follow.', 4500); }
   save();
   // zone challenge: free every hexed creature
   if (FREE_ALL_ZONES.includes(d.zone)) {
@@ -234,14 +236,14 @@ function unhex(c) {
   }
   // secret chain: six chipmunks (no hint until it completes)
   const chips = CREATURES.filter(k => k.species === 'chipmunk');
-  if (!G.flag('chainChip') && chips.every(k => S.freed[k.id])) setTimeout(startChain, lines.length ? 50 : 900);
+  if (!G.flag('chainChip') && chips.every(k => S.freed[k.id])) setTimeout(startChain, 900);
 }
 
 function startChain() {
   S.flags.chainChip = true; rebuildSolids(); save();
   addClue('chipmunks');
   chime(4);
-  toast('🎐 Something stirs in the forest...', 3500);
+  notice('🎐 Something stirs in the forest... six chipmunks come scampering toward you!');
   const chips = creatures.filter(c => c.def.species === 'chipmunk');
   chips.forEach((c, i) => {
     const d = Math.hypot(c.x - S.px, c.y - S.py);
@@ -270,16 +272,11 @@ function updateChain(dt) {
   if (chain.phase === 'gather') {
     const near = chips.every(c => Math.hypot(c.x - S.px, c.y - S.py) < 2.2);
     if (near || chain.t > 6) {
-      chain.phase = 'note';
       burst(S.px, S.py - 1.5, '#fffbe0', 30);
       chime(3);
-      say(['The six chipmunks gather around your feet, chattering all at once.',
-        'A little note drifts down out of the sky and lands in your hands. It reads:',
-        '"' + CLUES.chipmunks + '"',
-        '(The clue is saved in your Journal.)'], () => {
-        chain.phase = 'lead'; chain.t = 0;
-        chips.forEach(c => { c.mode = 'chainlead'; c.path = findPath('out', c.x, c.y, HOLLOW_DOOR.x, HOLLOW_DOOR.y); });
-      });
+      notice('📜 A little note drifts down out of the sky. A new clue is in your Journal. The chipmunks want you to follow!', 'journal');
+      chain.phase = 'lead'; chain.t = 0;
+      chips.forEach(c => { c.mode = 'chainlead'; c.path = findPath('out', c.x, c.y, HOLLOW_DOOR.x, HOLLOW_DOOR.y); });
     }
   } else if (chain.phase === 'lead') {
     const arrived = chips.filter(c => c.mode === 'chainlead' && c.path && c.path.length === 0);
@@ -325,7 +322,7 @@ function updateCreatures(dt) {
       if (!leadWait(c)) followPath(c, dt, 2.4);
       if (c.path.length === 0) {
         c.mode = 'free'; c.hx = L.x; c.hy = L.y; G.setFlag(L.flag);
-        burst(L.x, L.y, '#fff6c8', 20); chime(2);
+        burst(L.x, L.y, '#fff6c8', 20); chime(2); toast('🐇 The bunny stops and sniffs at something in the grass.', 3500);
       }
       continue;
     }
@@ -363,6 +360,16 @@ function followPath(c, dt, speed, stopFn) {
   if (c.mode === 'gather' && !c.path.length) c.path = findPath(S.map, c.x, c.y, S.px, S.py) || [];
 }
 
+// ================================================================ notices (non-blocking)
+function notice(text, kind) {
+  toast(text, 5000, 'notice');
+  S.log = S.log || [];
+  S.log.unshift(text); if (S.log.length > 40) S.log.pop();
+  if (kind === 'book') S.newBook = true;
+  if (kind === 'journal') S.newJournal = true;
+  hudCache = ''; save();
+}
+
 // ================================================================ lanterns, clues, pages
 function kindle(id) {
   S.lanterns[id] = true;
@@ -371,32 +378,31 @@ function kindle(id) {
   chime(1);
   addLateEffect('lantern');
   save();
-  if (['lantern1', 'lantern2', 'lantern3'].every(k => S.lanterns[k])) {
+  const n = ['lantern1', 'lantern2', 'lantern3'].filter(k => S.lanterns[k]).length;
+  if (n === 3) {
     S.flags.groveLit = true;
     G.setZone('grove', 0);
-    say(['The third lantern catches. All at once the shadows lift from the grove.']);
-  } else {
-    const n = ['lantern1', 'lantern2', 'lantern3'].filter(k => S.lanterns[k]).length;
-    say([`The old lantern flickers to life. (${n} of 3 lanterns lit)`]);
-  }
+    notice('🏮 The third lantern catches. The shadows lift from the grove.');
+  } else toast(`🏮 The old lantern flickers to life (${n} of 3)`, 3000);
 }
 function addLateEffect(k) {
   if (S.late[k]) return;
-  S.late[k] = true; save();
-  setTimeout(() => toast('📖 Spellbook updated', 2500), 900);
+  S.late[k] = true; S.lateNew = S.lateNew || {}; S.lateNew[k] = true;
+  setTimeout(() => notice('📖 Your Spellbook wrote down something new about this spell.', 'book'), 900);
+  save();
 }
 function addClue(id) {
   if (S.clues.find(c => c.id === id)) return;
-  S.clues.push({ id, text: CLUES[id], done: false }); save();
+  S.clues.push({ id, text: CLUES[id], done: false, isNew: true }); S.newJournal = true; save();
 }
 function resolveClue(id) {
   const c = S.clues.find(c => c.id === id);
-  if (c && !c.done) { c.done = true; save(); setTimeout(() => { chime(4); toast('📜 Clue solved!', 3000); }, 700); }
+  if (c && !c.done) { c.done = true; save(); setTimeout(() => { chime(4); notice('📜 Clue solved! It\'s checked off in your Journal.', 'journal'); }, 700); }
 }
 function revealPage(p) {
   const pg = S.pages[p];
   if (!pg || pg.cast) return false;
-  pg.cast = true; save();
+  pg.cast = true; pg.isNew = true; save();
   return true;
 }
 function uncastCount() { return PAGE_ORDER.filter(p => p !== 'write' && S.pages[p] && !S.pages[p].cast).length; }
@@ -420,9 +426,8 @@ function useSpell(i) {
   }
 }
 function learned(p) {
-  const pg = PAGES[p];
   chime(4);
-  say([`✨ The spell's name glows on its page: ${pg.name}!`, ...pg.effects.map(e => '• ' + e), '(Written into your Spellbook.)']);
+  notice(`✨ New spell learned: ${PAGES[p].name}! Read its page in your Spellbook.`, 'book');
 }
 function castWrite(i) {
   const next = PAGE_ORDER.find(p => !S.pages[p]);
@@ -431,18 +436,13 @@ function castWrite(i) {
   if (!G.has('wisp')) { say(['Write needs a Wisp Feather to cast. They are rare... keep an eye out.']); return; }
   S.pouch.splice(i, 1);
   G.take('wisp');
-  S.pages[next] = { cast: false };
+  S.pages[next] = { cast: false, isNew: true };
   const first = revealPage('write');
   chime(3);
   burst(S.px, S.py, '#e6d6ff', 30);
-  const lines = ['You scatter the Write Powder over a blank page and lay the Wisp Feather on top.',
-    'The feather melts into light, and words begin to write themselves...',
-    `A new formula: "${PAGES[next].unknown}".`];
-  if (first) lines.push(`✨ The first spell's name glows on its page: Write!`);
-  say(lines, () => {
-    toast('📖 Spellbook updated', 2500);
-    if (S.map === 'hut' && S.zones.hut > 0) G.setZone('hut', 0);
-  });
+  notice(`✒️ The Wisp Feather melts into light and words write themselves: a new formula, "${PAGES[next].unknown}".`, 'book');
+  if (first) setTimeout(() => notice('✨ New spell learned: Write! Read its page in your Spellbook.', 'book'), 1200);
+  if (S.map === 'hut' && S.zones.hut > 0) setTimeout(() => G.setZone('hut', 0), 1500);
   save();
 }
 function finishSeeker() {
@@ -455,66 +455,151 @@ function finishSeeker() {
   });
   rebuildSolids();
   const first = revealPage('seeker');
-  if (found.length) { chime(3); toast('🔮 Something hidden is revealed!', 3000); }
+  if (found.some(o => o.id === 'hollowgate')) { chime(3); notice('🔮 The hedge was only pretending! A narrow gap opens between the leaves.'); }
+  else if (found.length) { chime(3); toast('🔮 Something hidden is revealed!', 3000); }
   else toast('🔮 Nothing hidden here.', 2200);
-  if (first) setTimeout(() => learned('seeker'), found.length ? 600 : 300);
-  if (found.some(o => o.id === 'hollowgate')) setTimeout(() => say(['The hedge was only pretending! A narrow gap opens between the leaves.']), 700);
+  if (first) setTimeout(() => learned('seeker'), 800);
   save();
 }
 
-// ================================================================ fairy
-function fairyStage() {
-  if (!G.flag('bookFound')) return 1;
-  if (!S.pages.write || !S.pages.write.cast) return 2;
-  if (!S.pages.light || !S.pages.light.cast) return 3;
-  if (!G.flag('keyTaken')) return 4;
-  if (!G.flag('doorOpen')) return 5;
-  if (!S.pages.seeker) return 6;
-  if (!S.pages.seeker.cast) return 7;
-  return 8;
+// ================================================================ Fennel
+const TREATS = ['honeycake', 'dew', 'button', 'honey', 'strawberry', 'inkberry'];
+function treatsHeld() { return TREATS.filter(k => G.has(k)); }
+function objPos(id) { const o = OBJECTS.find(o => o.id === id); return { map: o.map, x: o.tx + o.tw / 2, y: o.ty + o.th / 2 }; }
+function fennelPos() {
+  if (S.map === 'out' && S.fairyOut && fairyRT) return { map: 'out', x: fairyRT.x, y: fairyRT.y };
+  return objPos('fairy');
 }
-const FAIRY = {
-  1: { want: 'honeycake', ask: ['FENNEL: I\'m so hungry... Is there anything sweet in the cupboard? Those doors are far too heavy for me.'],
-    hint: ['FENNEL: The bureau! Old Moss locked his spellbook in there.', 'FENNEL: He always said: "From high to low, as light falls." And he hid little marks on things... something high, something in the middle, something low. Look closely!'] },
-  2: { want: 'dew', ask: ['FENNEL: I\'m parched. There\'s a thimble of dew on the windowsill, but it\'s heavier than I am.'],
-    hint: ['FENNEL: Your book\'s first page tells you what to gather. Grind the inkberries at the mortar, then put everything together at the workbench.', 'FENNEL: To cast it, open your Pouch. It will use the Wisp Feather from the bureau.'] },
-  3: { want: 'button', ask: ['FENNEL: Ooh, that brass button in the sewing basket! It\'s so shiny. Could you bring it to me?'],
-    hint: ['FENNEL: For the new spell you need a candle stub and a sunstone. Something in this hut keeps time with a warm stone...', 'FENNEL: Join them at the workbench, then bring me the Dim Orb. I\'ll enchant it for you.'] },
-  4: { hint: ['FENNEL: Light! Now we can see things properly.', 'FENNEL: Have you noticed that rug is a bit lumpy? And the cellar has been pitch dark for ages.'] },
-  5: { hint: ['FENNEL: The door key! Go on, open the door!'] },
-  6: { hint: ['FENNEL: The whole forest is hexed, just like the hut was. Walk right up to a hexed creature and your book can set it free.',
-    'FENNEL: And if you have a Wisp Feather, you can Write another spell. Ash from the hearth, ink, and a quill, same as before.'] },
-  7: { hint: ['FENNEL: That clear orb spell needs a shimmer petal and river glass. Flowers in the meadow, glass by the brook, maybe?', 'FENNEL: Bring me the Clear Orb when it\'s joined.'] },
-  8: { hint: ['FENNEL: Watch for shimmers and glows out there. Something is always hiding.', 'FENNEL: And come back to the hearth to recharge your orbs.'] },
-};
+// Requests she makes as you progress. Handing over the item earns a hint and kindness.
+function pendingRequest() {
+  if (!G.flag('fairyFree')) return null;
+  if (!G.flag('bookFound') && !S.gifts.r1) return { id: 'r1', item: 'honeycake', ask: 'FENNEL: I\'m so hungry... Is there anything sweet in the cupboard? Those doors are far too heavy for me.' };
+  if (G.flag('bookFound') && !(S.pages.write && S.pages.write.cast) && !S.gifts.r2) return { id: 'r2', item: 'dew', ask: 'FENNEL: I\'m parched. There\'s a thimble of dew on the windowsill, but it\'s heavier than I am.' };
+  if (S.pages.write && S.pages.write.cast && !(S.pages.light && S.pages.light.cast) && !S.gifts.r3) return { id: 'r3', item: 'button', ask: 'FENNEL: Ooh, that brass button in the sewing basket! It\'s so shiny. Could you bring it to me?' };
+  if (G.flag('keyTaken') && !G.flag('unhexKnown')) return { id: 'r4', item: 'honey', ask: 'FENNEL: Old Moss kept a jar of wildflower honey in the cellar. Bring me a taste and I\'ll teach you something wonderful. Something you\'ll need out there.' };
+  return null;
+}
+function teachUnhex() {
+  S.flags.unhexKnown = true; save();
+  chime(4); burst(S.px, S.py - 0.5, '#d9b8ff', 30);
+  return ['FENNEL: Wildflower honey! Oh, that tastes like summer.',
+    'Fennel takes your hand and draws a little looping shape in the air. Your fingertips tingle.',
+    'FENNEL: That\'s the un-hexing touch. Walk up to any hexed creature and tap it, gently.'];
+}
+function giveTreat(k) {
+  G.take(k); S.favor = (S.favor || 0) + 1;
+  burst(fennelPos().x, fennelPos().y, '#fff3b0', 16); blip(1400); save();
+  let lines = [`You give Fennel the ${ITEMS[k].name}.`];
+  if (k === 'honey' && !G.flag('unhexKnown')) lines = lines.concat(teachUnhex());
+  else lines.push('FENNEL: For me? You\'re a treasure. I\'ll remember this!');
+  lines.push(`(Fennel's kindness: ${S.favor}. Each enchantment uses 1.)`);
+  return lines;
+}
 function talkFairy() {
-  const canEnchant = RECIPES.some(r => r.station === 'fairy' && S.pages[r.page]);
-  const talk = () => {
-    const st = fairyStage();
-    const f = FAIRY[st];
-    let lines = f.hint.slice();
-    if (st === 8 && !G.flag('groveLit')) lines.push('FENNEL: The birch grove is so dark... I bet those old lanterns could still be lit.');
-    if (f.want && !S.gifts[st]) {
-      if (G.has(f.want)) {
-        G.take(f.want); S.gifts[st] = true; save();
-        burst(6.5, 3.5, '#fff3b0', 16); blip(1400);
-        lines = [`You give Fennel the ${ITEMS[f.want].name}.`, 'FENNEL: Oh! For me? You\'re a treasure.', ...f.hint];
-      } else lines = f.ask;
+  const opts = ['Ask for a hint'], acts = [hintFairy];
+  if (treatsHeld().length) { opts.push('Give a treat'); acts.push(treatMenu); }
+  if (RECIPES.some(r => r.station === 'fairy' && S.pages[r.page])) { opts.push(`Enchant something (kindness ${S.favor || 0})`); acts.push(() => openStation('fairy')); }
+  opts.push('Goodbye'); acts.push(() => { });
+  choice('FENNEL: Hello, friend! What can I do for you?', opts, i => acts[i]());
+}
+function treatMenu() {
+  const t = treatsHeld();
+  choice('Which treat?', t.map(k => `${ITEMS[k].icon} ${ITEMS[k].name}`).concat(['Never mind']), i => { if (i < t.length) say(giveTreat(t[i])); });
+}
+function hintFairy() {
+  const req = pendingRequest();
+  if (req) {
+    if (G.has(req.item)) {
+      S.gifts[req.id] = true;
+      let lines = giveTreat(req.item);
+      if (req.item !== 'honey') lines = lines.slice(0, 1).concat(['FENNEL: Oh! Just what I wanted. Now, let me think...'], smartHint(), lines.slice(-1));
+      say(lines);
+    } else say([req.ask]);
+    return;
+  }
+  say(smartHint());
+}
+// Location-aware hints: everything you could do next, then the closest one wins.
+function smartHint() {
+  const T = [];
+  const F = (k) => G.flag(k), has = G.has, pg = S.pages;
+  const at = (id, text) => { const p = objPos(id); T.push({ map: p.map, x: p.x, y: p.y, text }); };
+  const now = (text) => T.push({ map: null, text });
+  const nextFormula = PAGE_ORDER.find(p => !pg[p]);
+  if (!F('bookFound')) at('bureau', 'Old Moss locked his spellbook in the bureau. "From high to low, as light falls." He hid little marks on things. Something high, something in the middle, something low. Look closely!');
+  // Write: only when there is a page to write and a feather to pay with
+  if (pg.write && nextFormula && has('wisp')) {
+    if (has('writepowder_dummy')) { }
+    const powder = S.pouch.some(p => p.type === 'writepowder');
+    if (powder) now('You have Write Powder in your Pouch. Open the Pouch and cast it. It will use your Wisp Feather.');
+    else {
+      if (!has('ash')) at('hearth', 'Write needs hearth ash. Scoop some from the hearth.');
+      if (!has('berryink')) {
+        if (G.count('inkberry') >= 2) at('mortar', 'Grind two inkberries at the mortar to make berry ink.');
+        else if (!F('berriesTaken')) at('bowl', 'There are inkberries in the bowl on the table.');
+        else at('berrybush', 'Inkberries grow on a bush in the sunny meadow.');
+      }
+      if (!has('quill')) { if (!F('quillsTaken')) at('vase', 'Goose quills! There are some in the vase.'); else if (!F('outQuill')) at('goosequill', 'Geese drop quills down by the brook.'); }
+      if (has('ash') && has('berryink') && has('quill')) at('bench', 'You have everything for Write. Put it together at the workbench.');
     }
-    say(lines);
-  };
-  if (canEnchant) choice('FENNEL: What can I do for you?', ['Talk', 'Enchant something'], i => i === 0 ? talk() : openStation('fairy'));
-  else talk();
+  }
+  // Light
+  if (pg.light && !S.pouch.some(p => p.type === 'lightorb')) {
+    if (has('dimorb')) now('Bring the Dim Orb to me and choose "Enchant". That makes it a real spell.');
+    else {
+      if (!has('candle')) at('nightstand', 'For the orb spell, you need a candle stub. Try the nightstand drawer.');
+      if (!has('sunstone')) at('clock', 'The new spell wants a sunstone. Something in this hut keeps time with a warm stone...');
+      if (has('candle') && has('sunstone')) at('bench', 'Join the candle stub and the sunstone at the workbench into a Dim Orb.');
+    }
+  }
+  if (S.pouch.some(p => p.type === 'lightorb') && !(pg.light && pg.light.cast)) now('Your new orb is in your Pouch. Try casting it!');
+  // Cellar, honey, door
+  if (pg.light && pg.light.cast) {
+    if (!F('rugRolled')) at('rug', 'Have you noticed that rug is a bit lumpy?');
+    if (!F('keyTaken')) at(F('rugRolled') && S.map !== 'cellar' ? 'trapdoor' : 'keyhook', 'The cellar has been dark for ages. Take your light down there and look along the walls.');
+    if (!F('crateWisp') && F('rugRolled')) at('crate', 'There\'s an old crate in the cellar. Look inside it, with some light.');
+    if (!F('honeyTaken') && F('keyTaken')) at('jars', 'Old Moss kept wildflower honey in the cellar jars.');
+  }
+  if (F('keyTaken') && !F('doorOpen')) at('door', 'You have the key! The front door is waiting.');
+  const lightOrb = S.pouch.find(p => p.type === 'lightorb'), seekOrb = S.pouch.find(p => p.type === 'seekerorb');
+  if ((lightOrb && lightOrb.charges === 0) || (seekOrb && seekOrb.charges === 0)) at('hearth', 'One of your orbs has gone dark. Recharge it at the hut hearth.');
+  // Seeker
+  if (pg.seeker && !seekOrb) {
+    if (has('clearorb')) now('Bring me the Clear Orb and choose "Enchant".');
+    else {
+      if (!has('petaldust')) {
+        if (has('petal')) at('mortar', 'Grind the shimmer petal at the mortar.');
+        else if (!F('flowerTaken')) at('shimmerflower', 'A shimmering flower grows in the meadow, way over on the east side.');
+      }
+      if (!has('riverglass') && !F('glassTaken')) at('riverglass', 'Look for river glass along the brook bank.');
+      if ((has('petaldust') || has('petal')) && has('riverglass')) at('bench', 'Join the petal dust and river glass at the workbench.');
+    }
+  }
+  // Outdoors
+  if (F('doorOpen')) {
+    if (F('unhexKnown')) {
+      CREATURES.forEach(c => { if (!S.freed[c.id]) { const z = ZONES.out.find(z => z.id === c.zone); T.push({ map: 'out', x: c.x, y: c.y, text: `I can feel a hexed ${c.species} somewhere around ${z ? z.name : 'here'}.` }); } });
+    }
+    if (pg.light && pg.light.cast && !F('groveLit')) ['lantern1', 'lantern2', 'lantern3'].forEach(id => { if (!S.lanterns[id]) at(id, 'The birch grove has old lanterns. Stand close to one while your Light glows.'); });
+    if (seekOrb) OBJECTS.forEach(o => { if (o.secret && !S.revealed[o.id] && (!o.vis || o.vis())) { const z = zoneAt(o.map, o.tx, o.ty); T.push({ map: o.map, x: o.tx + 0.5, y: o.ty + 0.5, text: `Something shimmers around ${z.name}. Try your Seeker Orb there.` }); } });
+    if (F('bunnyLed') && !F('bellTaken')) at('bell', 'The bunny led you somewhere. Did you pick up what it found?');
+    if (F('chipsInHollow') && S.revealed.hollowgate && (!F('acornTaken') || !F('hollowWisp'))) at('hollowwisp', 'The chipmunks have treasures in their hollow.');
+  }
+  if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
+  const fp = fennelPos();
+  const dist = (t) => t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y);
+  T.sort((a, b) => dist(a) - dist(b));
+  return ['FENNEL: ' + T[0].text];
 }
 
 // ================================================================ input
 const keys = {};
-let joy = null;
+let joy = null, down = null;
 window.addEventListener('keydown', e => {
   keys[e.key.toLowerCase()] = true;
   if (!started) return;
   const k = e.key.toLowerCase();
-  if (k === ' ' || k === 'e' || k === 'enter') { e.preventDefault(); if (dlg.open) advance(); else if (!panelOpen()) doAct(); }
+  if (k === ' ' || k === 'e' || k === 'enter') { e.preventDefault(); if (dlg.open) advance(); else if (!panelOpen() && acts.length) doTarget(acts[0]); }
   if (k === 'escape') closePanel();
   if (!dlg.open) {
     if (k === 'b' && G.flag('bookFound')) openPanel('book');
@@ -526,12 +611,20 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
 cv.addEventListener('pointerdown', e => {
   audioInit();
-  if (dlg.open) { advance(); return; }
+  down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
+  if (dlg.open) return;
   joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
   cv.setPointerCapture(e.pointerId);
 });
 cv.addEventListener('pointermove', e => { if (joy && e.pointerId === joy.id) { joy.x = e.clientX; joy.y = e.clientY; } });
-const endJoy = e => { if (joy && e.pointerId === joy.id) joy = null; };
+const endJoy = e => {
+  if (down && e.pointerId === down.id && e.type === 'pointerup') {
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
+    if (moved < 12 && dt < 450) handleTap(e.clientX, e.clientY);
+  }
+  down = null;
+  if (joy && e.pointerId === joy.id) joy = null;
+};
 cv.addEventListener('pointerup', endJoy);
 cv.addEventListener('pointercancel', endJoy);
 
@@ -550,33 +643,72 @@ function moveInput() {
   return [mx, my];
 }
 
-// ================================================================ interaction
-let actTarget = null;
-function findAct() {
-  if (seeker) return null;
-  const m = MAPS[S.map];
-  let best = null, bd = 1e9;
+// ================================================================ interaction: nearby things glow; tap them
+let acts = [];
+function findActs() {
+  if (seeker) return [];
+  const m = MAPS[S.map], out = [];
   for (const o of m.objs) {
     if (!objVisible(o)) continue;
     const a = o.act();
     if (!a) continue;
     const nx = clamp(S.px, o.tx, o.tx + o.tw), ny = clamp(S.py, o.ty, o.ty + o.th);
     let d = Math.hypot(S.px - nx, S.py - ny);
-    if (!o.solid && o.layer !== 'floor') d -= 0.15; // pickups and the fairy win ties
-    if (d < 0.75 && d < bd) { bd = d; best = a; }
+    if (o.id === 'fairy') { d = Math.hypot(S.px - (o.tx + 0.5), S.py - (o.ty + 0.4)) - 0.3; }
+    if (d < 0.95) out.push({ d, a, x: o.tx, y: o.ty, w: o.tw, h: o.th, id: o.id });
   }
   for (const c of creatures) {
     if (c.mode !== 'hexed') continue;
-    const d = Math.hypot(S.px - c.x, S.py - c.y);
-    if (d < 1.25 && d - 0.4 < bd) { bd = d - 0.4; best = { label: `Unhex the ${speciesName(c.def.species)}`, fn: () => unhex(c) }; }
+    const d = Math.hypot(S.px - c.x, S.py - c.y) - 0.3;
+    if (d < 1.0) {
+      const a = G.flag('unhexKnown') ? { label: `Unhex the ${speciesName(c.def.species)}`, fn: () => unhex(c) }
+        : { label: 'Look at the creature', fn: () => say(['A little creature, wrapped in a gray hex. It looks miserable, but you don\'t know how to help it... yet.', 'Maybe Fennel knows something.']) };
+      out.push({ d, a, x: c.x - 0.4, y: c.y - 0.45, w: 0.8, h: 0.8, id: c.id });
+    }
   }
-  return best;
+  if (S.map === 'out' && S.fairyOut && fairyRT) {
+    const d = Math.hypot(S.px - fairyRT.x, S.py - fairyRT.y) - 0.3;
+    if (d < 1.3) out.push({ d, a: { label: 'Talk to Fennel', fn: talkFairy }, x: fairyRT.x - 0.35, y: fairyRT.y - 0.4, w: 0.7, h: 0.7, id: 'fennel' });
+  }
+  out.sort((a, b) => a.d - b.d);
+  return out.slice(0, 3);
 }
-function doAct() { if (actTarget && !paused) { audioInit(); const t = actTarget; t.fn(); rebuildSolids(); } }
-$('act').addEventListener('click', (e) => { e.stopPropagation(); doAct(); });
+function doTarget(t) { if (paused) return; audioInit(); t.a.fn(); rebuildSolids(); }
+function handleTap(x, y) {
+  if (dlg.open) { if (!dlg.choosing) advance(); return; }
+  if (paused) return;
+  for (const t of acts) if (t.pill && inRect(x, y, t.pill)) { doTarget(t); return; }
+  for (const t of acts) if (t.box && inRect(x, y, t.box)) { doTarget(t); return; }
+}
+function inRect(x, y, r) { return x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h; }
+function drawActs(t) {
+  const fs = Math.round(clamp(TS * 0.32, 13, 17));
+  ctx.font = `${fs}px Georgia, serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const placed = [];
+  acts.forEach(a => {
+    const x = a.x * TS - camX, y = a.y * TS - camY, w = a.w * TS, h = a.h * TS;
+    const pulse = 0.5 + 0.5 * Math.sin(t * 4);
+    ctx.save();
+    ctx.shadowColor = 'rgba(255,230,140,0.9)'; ctx.shadowBlur = 8 + pulse * 8;
+    ctx.strokeStyle = `rgba(255,236,160,${0.6 + 0.35 * pulse})`; ctx.lineWidth = 2.5;
+    rr(x - 3, y - 3, w + 6, h + 6, 9); ctx.stroke();
+    ctx.restore();
+    const label = a.a.label;
+    const tw = ctx.measureText(label).width + 22, ph = fs + 14;
+    let px = clamp(x + w / 2 - tw / 2, 6, VW - tw - 6), py = y - ph - 6;
+    if (py < 70) py = y + h + 6;
+    for (const p of placed) if (Math.abs(p.y - py) < ph && px < p.x + p.w && px + tw > p.x) py = p.y - ph - 4;
+    ctx.fillStyle = 'rgba(250,244,230,0.96)'; ctx.strokeStyle = '#c9a96e'; ctx.lineWidth = 2;
+    rr(px, py, tw, ph, ph / 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#4a3a6a'; ctx.fillText(label, px + tw / 2, py + ph / 2 + 1);
+    a.pill = { x: px - 4, y: py - 4, w: tw + 8, h: ph + 8 };
+    a.box = { x: x - 8, y: y - 8, w: w + 16, h: h + 16 };
+    placed.push({ x: px, y: py, w: tw });
+  });
+}
 
 // ================================================================ dialog
-const dlg = { open: false, lines: [], cb: null };
+const dlg = { open: false, lines: [], cb: null, shown: 0 };
 function say(lines, cb) {
   if (!Array.isArray(lines)) lines = [lines];
   if (dlg.open) { dlg.lines.push(...lines); if (cb) { const old = dlg.cb; dlg.cb = () => { old && old(); cb(); }; } return; }
@@ -590,10 +722,12 @@ function showLine() {
   const m = t.match(/^([A-Z]+):\s(.*)$/);
   $('dtext').innerHTML = m ? `<b>${m[1][0] + m[1].slice(1).toLowerCase()}</b> ${esc(m[2])}` : esc(t);
   $('dmore').style.display = 'block';
+  dlg.shown = performance.now();
 }
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function advance() {
   if (!dlg.open || dlg.choosing) return;
+  if (performance.now() - dlg.shown < 300) return;
   dlg.lines.shift();
   if (dlg.lines.length) { showLine(); return; }
   dlg.open = false;
@@ -619,13 +753,15 @@ function choice(q, opts, cb) {
   };
   if (dlg.open) { const old = dlg.cb; dlg.cb = () => { old && old(); go(); }; } else go();
 }
-$('dialog').addEventListener('pointerdown', e => { e.stopPropagation(); audioInit(); if (!dlg.choosing) advance(); });
+$('dialog').addEventListener('pointerdown', e => { e.stopPropagation(); audioInit(); });
+$('dialog').addEventListener('click', e => { e.stopPropagation(); if (!dlg.choosing) advance(); });
 
 // ================================================================ toasts
-function toast(text, ms = 2200) {
+function toast(text, ms = 2200, cls) {
   const el = document.createElement('div');
-  el.className = 'toast'; el.textContent = text;
+  el.className = 'toast' + (cls ? ' ' + cls : ''); el.textContent = text;
   $('toasts').appendChild(el);
+  while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
   setTimeout(() => el.classList.add('out'), ms);
   setTimeout(() => el.remove(), ms + 600);
 }
@@ -637,19 +773,31 @@ $('pclose').addEventListener('click', e => { e.stopPropagation(); closePanel(); 
 $('panel').addEventListener('pointerdown', e => e.stopPropagation());
 document.querySelectorAll('#topbar button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); audioInit(); if (!dlg.open) openPanel(b.dataset.p); }));
 
+function pageHtml(p, n, compact) {
+  const st = S.pages[p], pg = PAGES[p];
+  let html = `<div class="page${compact ? ' compact' : ''}"><div class="pn">Page ${n + 1}${st.isNew && !compact ? ' <span class="new">NEW</span>' : ''}</div><h3>${st.cast ? pg.name : '???'}</h3>` +
+    (st.cast ? '' : `<div class="muted">${pg.unknown}. Cast it to learn its name.</div>`) +
+    `<div class="shape">${SHAPES[pg.shape]}</div><h4>Formula</h4><ul>${pg.formula.map(f => `<li>${f}</li>`).join('')}</ul>`;
+  if (st.cast && !compact) {
+    const eff = pg.effects.map(e => `<li>${e}</li>`);
+    Object.keys(LATE_EFFECTS).forEach(k => { if (S.late[k] && LATE_EFFECTS[k].page === p) eff.push(`<li>✦ ${LATE_EFFECTS[k].text}${S.lateNew && S.lateNew[k] ? ' <span class="new">NEW</span>' : ''}</li>`); });
+    html += `<h4>Effects</h4><ul>${eff.join('')}</ul>`;
+  }
+  return html + '</div>';
+}
 function openPanel(kind) {
   const body = $('pbody');
   let title = '', html = '';
   if (kind === 'satchel') {
     title = '🎒 Satchel';
-    const groups = [['ingredient', 'Ingredients'], ['worked', 'Worked'], ['trinket', 'Trinkets'], ['tool', 'Tools']];
+    const groups = [['ingredient', 'Ingredients'], ['worked', 'Worked'], ['trinket', 'Treats & Trinkets'], ['tool', 'Tools']];
     let any = false;
     groups.forEach(([k, label]) => {
       const items = Object.keys(S.inv).filter(id => ITEMS[id] && ITEMS[id].kind === k && S.inv[id] > 0);
       if (!items.length) return;
       any = true;
       html += `<h3>${label}</h3><div class="grid">` + items.map(id =>
-        `<div class="item"><span class="ic">${ITEMS[id].icon}</span><span class="nm">${ITEMS[id].name}${S.inv[id] > 1 ? ' ×' + S.inv[id] : ''}</span><span class="ds">${ITEMS[id].desc}</span></div>`).join('') + '</div>';
+        `<div class="item"><span class="ic">${ITEMS[id].icon}</span><span class="nm">${ITEMS[id].name}${S.inv[id] > 1 ? ' ×' + S.inv[id] : ''}</span><span class="ds">${ITEMS[id].desc}${TREATS.includes(id) ? ' <i>Fennel likes these.</i>' : ''}</span></div>`).join('') + '</div>';
     });
     if (!any) html = '<p class="muted">Empty. Look closely at things to find what you need.</p>';
   } else if (kind === 'pouch') {
@@ -660,29 +808,19 @@ function openPanel(kind) {
       const known = S.pages[d.page] && S.pages[d.page].cast;
       const nm = known ? d.name : (d.shape === 'orb' ? 'Unknown Orb' : 'Unknown Powder');
       const ch = d.shape === 'orb' ? `<span class="charges">${'●'.repeat(p.charges)}${'○'.repeat(Math.max(0, S.maxCharge - p.charges))}</span>` : '<span class="charges">single use</span>';
-      return `<div class="spell"><span class="ic">${d.icon}</span><span class="nm">${nm}<br>${ch}</span><button data-use="${i}">Use</button></div>`;
+      return `<div class="spell"><span class="ic">${d.icon}</span><span class="nm">${nm}<br>${ch}</span><button data-use="${i}">Cast</button></div>`;
     }).join('');
     html += `<p class="muted small">${SHAPES.powder}. ${SHAPES.orb}.</p>`;
   } else if (kind === 'book') {
     title = '📖 Spellbook';
-    PAGE_ORDER.forEach((p, n) => {
-      const st = S.pages[p];
-      if (!st) return;
-      const pg = PAGES[p];
-      html += `<div class="page"><div class="pn">Page ${n + 1}</div><h3>${st.cast ? pg.name : '???'}</h3><div class="muted">${st.cast ? '' : pg.unknown + ' — cast it to learn its name.'}</div>` +
-        `<div class="shape">${SHAPES[pg.shape]}</div><h4>Formula</h4><ul>${pg.formula.map(f => `<li>${f}</li>`).join('')}</ul>`;
-      if (st.cast) {
-        const eff = pg.effects.slice();
-        Object.keys(LATE_EFFECTS).forEach(k => { if (S.late[k] && LATE_EFFECTS[k].page === p) eff.push('✦ ' + LATE_EFFECTS[k].text); });
-        html += `<h4>Effects</h4><ul>${eff.map(f => `<li>${f}</li>`).join('')}</ul>`;
-      }
-      html += '</div>';
-    });
+    PAGE_ORDER.forEach((p, n) => { if (S.pages[p]) html += pageHtml(p, n); });
     html += `<p class="muted small">The remaining pages are blank. Uncast formulas: ${uncastCount()} of 3.</p>`;
+    PAGE_ORDER.forEach(p => { if (S.pages[p]) delete S.pages[p].isNew; });
+    S.lateNew = {}; S.newBook = false;
   } else if (kind === 'journal') {
     title = '📜 Journal';
     html += '<h3>Clues</h3>';
-    html += S.clues.length ? S.clues.map(c => `<div class="clue ${c.done ? 'done' : ''}">${c.done ? '✔ ' : ''}${esc(c.text)}</div>`).join('') : '<p class="muted">No clues yet.</p>';
+    html += S.clues.length ? S.clues.map(c => `<div class="clue ${c.done ? 'done' : ''}">${c.done ? '✔ ' : ''}${c.isNew ? '<span class="new">NEW</span> ' : ''}${esc(c.text)}</div>`).join('') : '<p class="muted">No clues yet.</p>';
     html += '<h3>Curios</h3><div class="grid">';
     Object.keys(ITEMS).filter(k => ITEMS[k].kind === 'curio').forEach(k => {
       html += S.curios[k] ? `<div class="item"><span class="ic">${ITEMS[k].icon}</span><span class="nm">${ITEMS[k].name}</span><span class="ds">${ITEMS[k].desc}</span></div>`
@@ -691,48 +829,72 @@ function openPanel(kind) {
     html += '</div>';
     const freed = Object.keys(S.freed).length;
     html += `<h3>Creatures freed</h3><p>${freed} of ${CREATURES.length}</p>`;
+    html += `<h3>Fennel's kindness</h3><p>${S.favor || 0} (each enchantment uses 1; treats add 1)</p>`;
+    if (S.log && S.log.length) html += '<h3>Recent happenings</h3>' + S.log.slice(0, 15).map(l => `<div class="logline">${esc(l)}</div>`).join('');
+    S.clues.forEach(c => delete c.isNew); S.newJournal = false;
   }
   $('ptitle').textContent = title;
   body.innerHTML = html;
+  body.scrollTop = 0;
   body.querySelectorAll('[data-use]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); useSpell(+b.dataset.use); }));
   $('panel').classList.add('show');
+  hudCache = ''; save();
 }
 
-function openStation(st) {
+function openStation(st, backTo) {
   const list = RECIPES.filter(r => r.station === st && S.pages[r.page]);
   let html = '';
-  if (!list.length) html = '<p class="muted">Nothing you know how to make here yet.</p>';
+  if (st === 'fairy') html += `<p class="muted">Fennel's kindness: <b>${S.favor || 0}</b>. Each enchantment uses 1. Bring her treats to add more.</p>`;
+  if (!list.length) html += '<p class="muted">Nothing you know how to make here yet.</p>';
   list.forEach(r => {
-    const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k]));
+    const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k])) && (st !== 'fairy' || (S.favor || 0) > 0);
     const out = r.makes ? ITEMS[r.makes] : SPELL_ITEMS[r.spell];
     const known = r.spell ? (S.pages[r.page].cast ? out.name : (out.shape === 'orb' ? 'an unknown orb' : 'an unknown powder')) : out.name;
     html += `<div class="recipe"><div class="out">${out.icon} ${r.verb} → ${known}</div><div class="needs">` +
-      Object.keys(r.needs).map(k => `<span class="${G.has(k, r.needs[k]) ? 'have' : 'miss'}">${ITEMS[k].icon} ${ITEMS[k].name} ${G.count(k)}/${r.needs[k]}</span>`).join('') +
-      `</div><button data-make="${r.id}" ${ok ? '' : 'disabled'}>${r.verb}</button></div>`;
+      Object.keys(r.needs).map(k => `<span class="${G.has(k, r.needs[k]) ? 'have' : 'miss'}">${ITEMS[k].icon} ${ITEMS[k].name} ${G.count(k)}/${r.needs[k]}</span>`).join('') + '</div>';
+    // shortcut: missing a ground ingredient that you can grind right next door
+    if (st === 'bench' && S.map === 'hut') Object.keys(r.needs).forEach(k => {
+      if (G.has(k, r.needs[k])) return;
+      const g = RECIPES.find(x => x.station === 'mortar' && x.makes === k && S.pages[x.page]);
+      if (g && Object.keys(g.needs).every(n => G.has(n, g.needs[n]))) html += `<button class="side" data-grind="1">🥣 Grind ${ITEMS[Object.keys(g.needs)[0]].name} at the mortar</button> `;
+    });
+    html += `<button data-make="${r.id}" ${ok ? '' : 'disabled'}>${r.verb}</button></div>`;
   });
+  // the formulas from the book, right where you work
+  const pages = [...new Set(list.map(r => r.page))];
+  if (pages.length) html += '<h3>📖 From your Spellbook</h3>' + pages.map(p => pageHtml(p, PAGE_ORDER.indexOf(p), true)).join('');
+  if (backTo) html = `<button class="side back" data-back="1">← Back to the ${STATION_NAMES[backTo]}</button>` + html;
   $('ptitle').textContent = (st === 'fairy' ? '🧚 ' : st === 'mortar' ? '🥣 ' : '🔨 ') + STATION_NAMES[st];
   $('pbody').innerHTML = html;
-  $('pbody').querySelectorAll('[data-make]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); make(b.dataset.make); }));
+  $('pbody').scrollTop = 0;
+  $('pbody').querySelectorAll('[data-make]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); make(b.dataset.make, backTo); }));
+  $('pbody').querySelectorAll('[data-grind]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openStation('mortar', 'bench'); }));
+  $('pbody').querySelectorAll('[data-back]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); openStation(backTo); }));
   $('panel').classList.add('show');
 }
-function make(id) {
+function make(id, backTo) {
   const r = RECIPES.find(r => r.id === id);
   if (!Object.keys(r.needs).every(k => G.has(k, r.needs[k]))) return;
+  if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(['FENNEL: I\'d love to... but my sparkle is running low. A little treat would help!']); return; }
   if (r.spell && S.pouch.length >= 6) { closePanel(); say(['Your pouch is full.']); return; }
   Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
-  closePanel();
-  if (r.makes) { G.give(r.makes); say([r.station === 'mortar' ? `Grind, grind, grind... you make ${ITEMS[r.makes].name}.` : `You carefully join them into a ${ITEMS[r.makes].name}.`]); }
-  else {
-    const d = SPELL_ITEMS[r.spell];
-    S.pouch.push({ type: r.spell, charges: d.charges || 1 });
-    chime(2); save();
-    const nm = S.pages[r.page].cast ? d.name : (d.shape === 'orb' ? 'an unknown orb' : 'an unknown powder');
-    const lines = r.station === 'fairy'
-      ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch.`]
-      : [`You work everything together on the bench into ${nm}.`, `${d.icon} It goes into your Spell Pouch. Open the Pouch to cast it.`];
-    say(lines);
-  }
+  if (r.station === 'fairy') S.favor--;
   if (S.map === 'hut') burst(S.px, S.py - 0.5, '#fff3b0', 12);
+  if (r.makes) {
+    G.give(r.makes); blip(800);
+    // stay at the station (or hop back) so the next step is one tap away
+    if (backTo) { toast(`🥣 You grind it into ${ITEMS[r.makes].name}.`); openStation(backTo); }
+    else { toast(r.station === 'mortar' ? `🥣 Grind, grind... ${ITEMS[r.makes].name}!` : `🔨 You join them into a ${ITEMS[r.makes].name}.`); openStation(r.station); }
+    return;
+  }
+  closePanel();
+  const d = SPELL_ITEMS[r.spell];
+  S.pouch.push({ type: r.spell, charges: d.charges || 1 });
+  chime(2); save();
+  const nm = S.pages[r.page].cast ? d.name : (d.shape === 'orb' ? 'an unknown orb' : 'an unknown powder');
+  say(r.station === 'fairy'
+    ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch. (Kindness left: ${S.favor})`]
+    : [`You work everything together on the bench into ${nm}.`, `${d.icon} It goes into your Spell Pouch. Open the Pouch to cast it.`]);
 }
 
 // ---------------------------------------------------------------- bureau dial puzzle
@@ -800,7 +962,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   if (started) update(dt);
   render(now / 1000);
-  requestAnimationFrame(frame);
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
+requestAnimationFrame(frame);
 }
 function update(dt) {
   paused = dlg.open || panelOpen() || fade > 0.5;
@@ -836,9 +999,26 @@ function update(dt) {
   // zone entry
   const z = zoneAt(S.map, Math.floor(S.px), Math.floor(S.py));
   if (z !== curZone) { curZone = z; showZoneName(z.name); }
-  actTarget = paused ? null : findAct();
+  updateFairy(dt);
+  acts = paused ? [] : findActs();
   refreshHud();
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
+}
+function updateFairy(dt) {
+  if (S.map !== 'out' || !G.flag('fairyFree')) return;
+  if (!S.fairyOut) {
+    const r = OBJECTS.find(o => o.id === 'rune');
+    if (S.px > r.tx && S.px < r.tx + r.tw && S.py > r.ty && S.py < r.ty + r.th) {
+      S.fairyOut = true; fairyRT = { x: 7.8, y: 15.4 }; chime(2);
+      notice('✨ Fennel zips out of the hut to join you! Tap her anytime to talk. She goes home when you go inside.');
+    }
+    return;
+  }
+  if (!fairyRT) fairyRT = { x: S.px, y: S.py - 1 };
+  const tx = S.px - 0.8 * S.dir, ty = S.py - 0.75;
+  const d = Math.hypot(tx - fairyRT.x, ty - fairyRT.y);
+  const k = Math.min(1, dt * (d > 4 ? 4 : 2));
+  fairyRT.x += (tx - fairyRT.x) * k; fairyRT.y += (ty - fairyRT.y) * k;
 }
 function showZoneName(n) {
   const el = $('zonename'); el.textContent = n; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
@@ -847,13 +1027,13 @@ function startFade(cb) { fadeDir = 1; fadeCb = cb; }
 
 let hudCache = '';
 function refreshHud() {
-  const label = actTarget ? actTarget.label : '';
-  const st = `${label}|${G.flag('bookFound')}|${Math.ceil(lightT)}|${seeker ? 1 : 0}`;
+  const st = `${G.flag('bookFound')}|${Math.ceil(lightT)}|${seeker ? 1 : 0}|${S.newBook}|${S.newJournal}`;
   if (st === hudCache) return;
   hudCache = st;
-  const a = $('act');
-  if (label) { a.textContent = label; a.classList.add('show'); } else a.classList.remove('show');
-  document.querySelectorAll('#topbar [data-p]').forEach(b => { b.style.display = (b.dataset.p === 'satchel' || G.flag('bookFound')) ? '' : 'none'; });
+  document.querySelectorAll('#topbar [data-p]').forEach(b => {
+    b.style.display = (b.dataset.p === 'satchel' || G.flag('bookFound')) ? '' : 'none';
+    b.classList.toggle('badge', (b.dataset.p === 'book' && !!S.newBook) || (b.dataset.p === 'journal' && !!S.newJournal));
+  });
   let s = '';
   if (lightT > 0) s += `<span>🌕 Light ${Math.ceil(lightT)}s</span>`;
   if (seeker) s += '<span>🔮 Seeking...</span>';
@@ -885,13 +1065,23 @@ function render(t) {
   // sorted sprites
   const list = [];
   m.objs.forEach(o => { if (o.layer === 'normal' && objVisible(o) && o.draw !== 'none') list.push({ y: o.ty + o.th, f: () => drawObj(o, t) }); });
-  // trees as sprites so the hero can walk "behind" canopies
-  for (let y = y0; y <= y1 + 1 && y < m.h; y++) for (let x = x0; x <= x1; x++) {
+  // trees, bushes and hedges as painted sprites so the hero can walk "behind" them
+  const isHedge = (x, y) => { const c = m.rows[y] && m.rows[y][x]; return c === 'h' || (c === 'x' && !hollowOpen()); };
+  for (let y = y0; y <= y1 + 3 && y < m.h; y++) for (let x = Math.max(0, x0 - 1); x <= Math.min(m.w - 1, x1 + 1); x++) {
     const c = m.rows[y][x];
-    if (c === 'T' || c === 'B') list.push({ y: y + 0.95, f: () => drawTree(c, sx(x), sy(y), tileGray(S.map, x, y), x, y, t) });
+    if (c === 'T' || c === 'B') {
+      const sway = Math.sin(t * 0.8 + x * 0.7 + y) * 0.025;
+      list.push({ y: y + 0.95, f: () => drawSprite(treeKind(c, x, y, m), (hash(x, y + 5) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95, sway) });
+    } else if (c === 'b') {
+      list.push({ y: y + 0.9, f: () => drawSprite(bushKind(x, y), (hash(x + 3, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95) });
+    } else if (isHedge(x, y)) {
+      const v = (isHedge(x - 1, y) ? 1 : 0) | (isHedge(x + 1, y) ? 2 : 0);
+      list.push({ y: y + 0.9, f: () => drawSprite('hedge', v, tileGray(S.map, x, y), sx(x), sy(y) + TS * 0.98) });
+    }
   }
   creatures.forEach(c => { if (!c.gone) list.push({ y: c.y + 0.2, f: () => drawCreature(c, t) }); });
   list.push({ y: S.py + 0.3, f: () => drawHero(t) });
+  if (S.map === 'out' && S.fairyOut && fairyRT) list.push({ y: fairyRT.y + 1, f: () => DRAW.fairy(null, fairyRT.x * TS - camX - TS / 2, fairyRT.y * TS - camY - TS * 0.4, TS, TS, 0, t) });
   list.sort((a, b) => a.y - b.y).forEach(i => i.f());
 
   // particles
@@ -924,6 +1114,8 @@ function render(t) {
     ctx.fillStyle = `rgba(200,150,255,${0.5 + 0.3 * Math.sin(t * 3)})`;
     ctx.beginPath(); ctx.arc(sx(c.x) - TS * 0.1, sy(c.y) - TS * 0.08, TS * 0.04, 0, 7); ctx.arc(sx(c.x) + TS * 0.1, sy(c.y) - TS * 0.08, TS * 0.04, 0, 7); ctx.fill();
   });
+
+  drawActs(t);
 
   // seeker sweep
   if (seeker) {
@@ -984,6 +1176,7 @@ function C(hex, g, a) {
   const R = (r + (l - r) * g) * d, Gg = (gg + (l - gg) * g) * d, B = (b + (l - b) * g) * d;
   return a === undefined ? `rgb(${R | 0},${Gg | 0},${B | 0})` : `rgba(${R | 0},${Gg | 0},${B | 0},${a})`;
 }
+function hollowOpen() { return !!(S.revealed.hollowgate && G.flag('chainChip')); }
 function rr(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 function circ(x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
 function star(x, y, r, col) {
@@ -1049,33 +1242,31 @@ function drawTile(m, tx, ty, x, y, g, t) {
       if (c === 'o') { ctx.fillStyle = C('#cfc8bd', g); rr(x + TS * 0.14, y + TS * 0.18, TS * 0.72, TS * 0.64, TS * 0.3); ctx.fill(); ctx.fillStyle = C('#e2ddd4', g); rr(x + TS * 0.22, y + TS * 0.22, TS * 0.45, TS * 0.3, TS * 0.15); ctx.fill(); }
       break;
     }
-    case 'b': {
-      drawGrass(x, y, g, tx, ty);
-      ctx.fillStyle = C('#5aa65a', g); circ(x + TS * 0.5, y + TS * 0.55, TS * 0.42); ctx.fill();
-      ctx.fillStyle = C('#71bd6a', g); circ(x + TS * 0.38, y + TS * 0.45, TS * 0.2); ctx.fill();
-      if (hash(tx, ty) > 0.5) { ctx.fillStyle = C('#ff9fb8', g); circ(x + TS * 0.62, y + TS * 0.4, TS * 0.06); ctx.fill(); circ(x + TS * 0.45, y + TS * 0.7, TS * 0.05); ctx.fill(); }
-      break;
-    }
+    case 'b': drawGrass(x, y, g, tx, ty); break;
     case 'R': {
       drawGrass(x, y, g, tx, ty);
-      ctx.fillStyle = C('#a9a39b', g); rr(x + TS * 0.12, y + TS * 0.25, TS * 0.76, TS * 0.62, TS * 0.25); ctx.fill();
-      ctx.fillStyle = C('#c7c2ba', g); rr(x + TS * 0.22, y + TS * 0.3, TS * 0.4, TS * 0.22, TS * 0.1); ctx.fill();
+      const rg = ctx.createRadialGradient(x + TS * 0.38, y + TS * 0.38, TS * 0.05, x + TS * 0.5, y + TS * 0.6, TS * 0.5);
+      rg.addColorStop(0, C('#d6d1c8', g)); rg.addColorStop(0.6, C('#a9a39b', g)); rg.addColorStop(1, C('#77716a', g));
+      ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x + TS * 0.52, y + TS * 0.86, TS * 0.42, TS * 0.1, 0, 0, 7); ctx.fill();
+      ctx.fillStyle = rg; rr(x + TS * 0.1, y + TS * 0.22, TS * 0.8, TS * 0.66, TS * 0.28); ctx.fill();
+      ctx.strokeStyle = C('#8a847b', g, 0.6); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + TS * 0.3, y + TS * 0.5); ctx.lineTo(x + TS * 0.45, y + TS * 0.62); ctx.lineTo(x + TS * 0.6, y + TS * 0.55); ctx.stroke();
+      ctx.fillStyle = C('#7fae5a', g, 0.8); ctx.beginPath(); ctx.ellipse(x + TS * 0.7, y + TS * 0.32, TS * 0.1, TS * 0.05, 0.4, 0, 7); ctx.fill();
       break;
     }
     case 'h': case 'x': {
-      const open = c === 'x' && S.revealed.hollowgate && G.flag('chainChip');
-      if (open) { drawGrass(x, y, g, tx, ty); ctx.fillStyle = C('#3f8a47', g); ctx.fillRect(x, y, TS * 0.15, TS); ctx.fillRect(x + TS * 0.85, y, TS * 0.15, TS); break; }
-      ctx.fillStyle = C('#3f8a47', g); ctx.fillRect(x, y, TS + 1, TS + 1);
-      ctx.fillStyle = C('#53a35a', g);
-      for (let i = 0; i < 4; i++) { circ(x + (i % 2 ? 0.7 : 0.3) * TS, y + (i < 2 ? 0.3 : 0.7) * TS, TS * 0.22); ctx.fill(); }
+      drawGrass(x, y, g, tx, ty);
+      if (c === 'x' && hollowOpen()) { ctx.fillStyle = C('#e8d3a6', g, 0.6); ctx.fillRect(x + TS * 0.2, y, TS * 0.6, TS); }
       break;
     }
     case 'O': {
       drawGrass(x, y, g, tx, ty);
-      ctx.fillStyle = C('#8c8a95', g, 0.35); ctx.beginPath(); ctx.ellipse(x + TS * 0.5, y + TS * 0.9, TS * 0.35, TS * 0.1, 0, 0, 7); ctx.fill();
-      ctx.fillStyle = C('#9d9aa8', g); rr(x + TS * 0.22, y - TS * 0.35, TS * 0.56, TS * 1.2, TS * 0.2); ctx.fill();
-      ctx.fillStyle = C('#b9b6c4', g); rr(x + TS * 0.3, y - TS * 0.28, TS * 0.18, TS * 0.9, TS * 0.08); ctx.fill();
-      ctx.strokeStyle = C('#7ec8e6', g, 0.6); ctx.lineWidth = 2; circ(x + TS * 0.52, y + TS * 0.15, TS * 0.1); ctx.stroke();
+      ctx.fillStyle = 'rgba(30,40,20,0.3)'; ctx.beginPath(); ctx.ellipse(x + TS * 0.5, y + TS * 0.9, TS * 0.36, TS * 0.1, 0, 0, 7); ctx.fill();
+      const sg = ctx.createLinearGradient(x + TS * 0.22, 0, x + TS * 0.78, 0);
+      sg.addColorStop(0, C('#c4c1cc', g)); sg.addColorStop(0.45, C('#a29fae', g)); sg.addColorStop(1, C('#6f6c7a', g));
+      ctx.fillStyle = sg; rr(x + TS * 0.22, y - TS * 0.4, TS * 0.56, TS * 1.25, TS * 0.18); ctx.fill();
+      ctx.fillStyle = C('#7fae5a', g, 0.7); ctx.beginPath(); ctx.ellipse(x + TS * 0.35, y + TS * 0.75, TS * 0.12, TS * 0.06, 0, 0, 7); ctx.fill();
+      ctx.strokeStyle = G.flag('groveLit') || S.zones.stones === 0 ? 'rgba(126,200,230,0.9)' : C('#7ec8e6', g, 0.5); ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x + TS * 0.5, y + TS * 0.12, TS * 0.1, 0, 7); ctx.moveTo(x + TS * 0.5, y + TS * 0.22); ctx.lineTo(x + TS * 0.5, y + TS * 0.4); ctx.stroke();
       break;
     }
     default: drawGrass(x, y, g, tx, ty);
@@ -1248,14 +1439,39 @@ const DRAW = {
     ctx.fillStyle = C('#e8cf7a', g); ctx.fillRect(x + 8, y + 2, w - 16, 5);
   },
   hutx(o, x, y, w, h, g) {
-    ctx.fillStyle = 'rgba(30,40,30,0.2)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w * 0.55, h * 0.15, 0, 0, 7); ctx.fill();
-    ctx.fillStyle = C('#d9c3a0', g); rr(x + w * 0.08, y + h * 0.35, w * 0.84, h * 0.65, 6); ctx.fill();
-    ctx.fillStyle = C('#a0566b', g); ctx.beginPath(); ctx.moveTo(x - w * 0.04, y + h * 0.42); ctx.lineTo(x + w * 0.5, y - h * 0.25); ctx.lineTo(x + w * 1.04, y + h * 0.42); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#bf6f84', g); ctx.beginPath(); ctx.moveTo(x + w * 0.1, y + h * 0.35); ctx.lineTo(x + w * 0.5, y - h * 0.15); ctx.lineTo(x + w * 0.3, y + h * 0.35); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = C('#a9a39b', g); ctx.fillRect(x + w * 0.7, y - h * 0.1, w * 0.1, h * 0.3);
+    ctx.fillStyle = 'rgba(30,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w * 0.56, h * 0.14, 0, 0, 7); ctx.fill();
+    // walls: plaster with timber frame
+    const wg = ctx.createLinearGradient(x, 0, x + w, 0); wg.addColorStop(0, C('#e9dcc2', g)); wg.addColorStop(1, C('#c7b190', g));
+    ctx.fillStyle = wg; rr(x + w * 0.08, y + h * 0.32, w * 0.84, h * 0.68, 4); ctx.fill();
+    ctx.fillStyle = C('#7a543b', g);
+    ctx.fillRect(x + w * 0.08, y + h * 0.32, w * 0.84, h * 0.04); ctx.fillRect(x + w * 0.08, y + h * 0.32, w * 0.04, h * 0.68); ctx.fillRect(x + w * 0.88, y + h * 0.32, w * 0.04, h * 0.68);
+    ctx.fillRect(x + w * 0.08, y + h * 0.94, w * 0.84, h * 0.06);
+    // stone footing
+    ctx.fillStyle = C('#9d978e', g); for (let i = 0; i < 7; i++) { rr(x + w * (0.1 + i * 0.115), y + h * 0.9, w * 0.1, h * 0.09, 3); ctx.fill(); }
+    // roof with shingle rows
+    const rg = ctx.createLinearGradient(0, y - h * 0.3, 0, y + h * 0.45); rg.addColorStop(0, C('#c4718a', g)); rg.addColorStop(1, C('#8a4a5e', g));
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(x - w * 0.05, y + h * 0.42); ctx.lineTo(x + w * 0.5, y - h * 0.3); ctx.lineTo(x + w * 1.05, y + h * 0.42); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle = C('#7a3f52', g, 0.55); ctx.lineWidth = 1.5;
+    for (let r = 0; r < 7; r++) { const yy = y - h * 0.2 + r * h * 0.09; ctx.beginPath(); ctx.moveTo(x - w * 0.05, yy); ctx.lineTo(x + w * 1.05, yy); ctx.stroke();
+      for (let i = 0; i < 14; i++) { const xx = x + i * w * 0.08 + (r % 2) * w * 0.04; ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + h * 0.09); ctx.stroke(); } }
+    ctx.restore();
+    ctx.fillStyle = C('#e8a0b4', g, 0.5); ctx.beginPath(); ctx.moveTo(x + w * 0.5, y - h * 0.3); ctx.lineTo(x + w * 0.12, y + h * 0.36); ctx.lineTo(x + w * 0.2, y + h * 0.36); ctx.closePath(); ctx.fill();
+    // chimney
+    ctx.fillStyle = C('#9d978e', g); ctx.fillRect(x + w * 0.7, y - h * 0.12, w * 0.11, h * 0.3); ctx.fillStyle = C('#77716a', g); ctx.fillRect(x + w * 0.68, y - h * 0.15, w * 0.15, h * 0.05);
+    // door
     const open = G.flag('doorOpen');
-    ctx.fillStyle = C(open ? '#3a2e2a' : '#7a543b', g); rr(x + w * 0.36, y + h * 0.62, w * 0.2, h * 0.38, 5); ctx.fill();
-    ctx.fillStyle = C('#cfeaff', g); rr(x + w * 0.66, y + h * 0.55, w * 0.16, h * 0.18, 3); ctx.fill(); rr(x + w * 0.14, y + h * 0.55, w * 0.14, h * 0.18, 3); ctx.fill();
+    ctx.fillStyle = C('#5f412d', g); rr(x + w * 0.34, y + h * 0.58, w * 0.24, h * 0.37, 10); ctx.fill();
+    ctx.fillStyle = C(open ? '#2a201c' : '#8a5e3c', g); rr(x + w * 0.36, y + h * 0.61, w * 0.2, h * 0.34, 8); ctx.fill();
+    if (!open) { ctx.fillStyle = C('#e7c36a', g); circ(x + w * 0.52, y + h * 0.8, w * 0.015); ctx.fill(); }
+    // windows with flower boxes
+    [[0.66, 0.5], [0.14, 0.5]].forEach(([a, b]) => {
+      ctx.fillStyle = C('#5f412d', g); rr(x + w * a - 2, y + h * b - 2, w * 0.18 + 4, h * 0.22 + 4, 3); ctx.fill();
+      ctx.fillStyle = C('#cfeaff', g); rr(x + w * a, y + h * b, w * 0.18, h * 0.22, 2); ctx.fill();
+      ctx.fillStyle = C('#5f412d', g); ctx.fillRect(x + w * (a + 0.085), y + h * b, 2, h * 0.22); ctx.fillRect(x + w * a, y + h * (b + 0.1), w * 0.18, 2);
+      ctx.fillStyle = C('#7a543b', g); ctx.fillRect(x + w * a - 3, y + h * (b + 0.22), w * 0.18 + 6, h * 0.06);
+      ['#f7a8c8', '#fff3b0', '#e85a7a'].forEach((c, i) => { ctx.fillStyle = C(c, g); circ(x + w * (a + 0.03 + i * 0.06), y + h * (b + 0.21), w * 0.02); ctx.fill(); });
+    });
   },
   lantern(o, x, y, w, h, g, t) {
     const lit = S.lanterns[o.id];
@@ -1264,10 +1480,7 @@ const DRAW = {
     if (lit) { const gl = ctx.createRadialGradient(x + w / 2, y - h * 0.36, 0, x + w / 2, y - h * 0.36, TS * 0.6); gl.addColorStop(0, 'rgba(255,215,120,0.9)'); gl.addColorStop(1, 'rgba(255,215,120,0)'); ctx.fillStyle = gl; circ(x + w / 2, y - h * 0.36, TS * 0.6); ctx.fill(); }
     ctx.fillStyle = lit ? '#ffe39a' : C('#8a8a96', g); rr(x + w * 0.36, y - h * 0.48, w * 0.28, h * 0.24, 3); ctx.fill();
   },
-  berrybush(o, x, y, w, h, g) {
-    ctx.fillStyle = C('#4f9a57', g); circ(x + w / 2, y + h * 0.55, w * 0.44); ctx.fill();
-    ctx.fillStyle = C('#4b3a8c', g); [[0.3, 0.45], [0.55, 0.35], [0.65, 0.6], [0.4, 0.7], [0.5, 0.52]].forEach(([a, b]) => { circ(x + w * a, y + h * b, w * 0.07); ctx.fill(); });
-  },
+  berrybush(o, x, y, w, h, g) { drawSprite('berry', 0, g, x + w / 2, y + h * 0.95); },
   shimmerflower(o, x, y, w, h, g, t) {
     ctx.strokeStyle = C('#4f9a57', g); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + w / 2, y + h * 0.9); ctx.lineTo(x + w / 2, y + h * 0.45); ctx.stroke();
     const hue = (t * 60) % 360;
@@ -1280,6 +1493,20 @@ const DRAW = {
     ctx.font = `${Math.round(TS * 0.5)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(o.icon, x + w / 2, y + h * 0.5 + b);
     if (Math.sin(t * 2.3 + o.ty) > 0.6) star(x + w * 0.75, y + h * 0.25 + b, TS * 0.07, 'rgba(255,255,230,0.9)');
+  },
+  rune(o, x, y, w, h, g, t) {
+    const cx = x + w / 2, cy = y + h / 2, r = Math.min(w, h) * 0.46;
+    ctx.fillStyle = C('#b9b4a8', g); ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.8, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#cfcabd', g); ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.86, r * 0.68, 0, 0, 7); ctx.fill();
+    const glow = G.flag('fairyFree') && !S.fairyOut ? 0.5 + 0.5 * Math.sin(t * 2) : 0;
+    ctx.strokeStyle = glow ? `rgba(150,120,230,${0.55 + 0.4 * glow})` : C('#7d776b', g); ctx.lineWidth = Math.max(2, TS * 0.06);
+    for (let i = 0; i < 3; i++) { const a = i * 2.094 - 1.57; ctx.beginPath(); ctx.ellipse(cx + Math.cos(a) * r * 0.28, cy + Math.sin(a) * r * 0.22, r * 0.36, r * 0.29, 0, 0, 7); ctx.stroke(); }
+    ctx.beginPath(); ctx.ellipse(cx, cy, r * 0.72, r * 0.57, 0, 0, 7); ctx.stroke();
+  },
+  strawpatch(o, x, y, w, h, g) {
+    for (let i = 0; i < 4; i++) { const px = x + w * (0.2 + (i % 2) * 0.5) + (i > 1 ? w * 0.1 : 0), py = y + h * (0.35 + (i > 1 ? 0.35 : 0));
+      ctx.fillStyle = C('#3f8a47', g); ctx.beginPath(); ctx.ellipse(px, py, w * 0.14, h * 0.08, i, 0, 7); ctx.fill(); ctx.beginPath(); ctx.ellipse(px + w * 0.06, py + h * 0.05, w * 0.12, h * 0.07, -i, 0, 7); ctx.fill();
+      ctx.fillStyle = C('#e8434f', g); ctx.beginPath(); ctx.moveTo(px - w * 0.05, py + h * 0.04); ctx.lineTo(px + w * 0.05, py + h * 0.04); ctx.lineTo(px, py + h * 0.15); ctx.closePath(); ctx.fill(); }
   },
   well(o, x, y, w, h, g) {
     ctx.fillStyle = C('#a9a39b', g); circ(x + w / 2, y + h * 0.55, w * 0.42); ctx.fill();
@@ -1404,4 +1631,5 @@ $('btnCont').addEventListener('click', () => startGame(false));
 if (!loadSave()) $('btnCont').style.display = 'none';
 $('ver').textContent = VERSION;
 
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => { });
 requestAnimationFrame(frame);
