@@ -1,0 +1,111 @@
+HEXWOOD - DEVNOTES
+==================
+Shared session memory for Todd + Claude. Claude keeps this file up to date.
+Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
+a good spot), commit, and Claude will read them at the start of the next chat.
+
+Started: Nov 12, 2026
+Current version: none yet (design phase)
+
+
+WHAT HEXWOOD IS
+---------------
+A calm, top-down exploration and puzzle adventure for the phone, played in the
+browser. Zelda-style scrolling world, Myst-style curiosity, no combat.
+No ads, no energy meter, no timers, no failure states. Long play sessions with save.
+
+Inspirations: Zelda, Atari 2600 Adventure (level 3), Rogue, Banjo-Kazooie,
+Donkey Kong Country (collecting, searching, power-ups), Myst (puzzles,
+atmosphere), Marble Madness, the feel of R-Type / Tempest power-ups,
+States Builder: Trade Empire (rebuilding / unlocking land).
+No precise timing or pixel-exact taps needed to succeed.
+
+
+THE HERO
+--------
+A spell-mapper who restores color to a faded, hexed land.
+Eye for detail, interest in magic, loves puzzles.
+Spells are tools, not weapons. Also collects magical curios.
+
+
+CORE DECISIONS (locked)
+-----------------------
+View:      Top-down, world scrolls with the hero (like Zelda).
+Controls:  Touch anywhere and slide to move (same as Void and Bloom).
+Look:      Soft and colorful. (Aesthetic details get their own session.)
+Rooms:     Hand-built, about a dozen per session. No generator for now.
+Setting:   Starts in forest and meadow.
+
+Color restoration:
+  - The land starts gray.
+  - When a puzzle or challenge is solved, that specific place goes gray -> color.
+
+Creatures (no combat):
+  - Hexed creatures block or wander. A spell un-hexes them into friendly
+    critters (butterflies, bunnies, chipmunks, fireflies, etc.).
+  - Some un-hexes give an instant reward.
+  - Some freed critters beckon you to follow them to a reward.
+  - Freeing certain groups opens a new door or path.
+
+Secret chains:
+  - Chains are random and secret. NO hint that one has started or is in progress.
+  - Example: freeing butterflies is common and nice. Freeing 6 chipmunks makes
+    them all come back and lead you to an opening that wasn't there before.
+  - When a chain COMPLETES it announces itself with one or more of:
+      chime, sparkle, a helper animal arriving from off-screen to help or lead,
+      or a mystic note / cloud with a readable clue, e.g.
+      "Take the trail toward the purple mountains, and after you pass the
+       golden tree, take every right turn..."
+
+Clue Journal:
+  - Small, simple menu item (scroll icon).
+  - Holds every clue received until it is resolved into its reward.
+  - Resolved clues get checked off.
+
+The Village:
+  - Built from the creatures you un-hex: freed critters move in.
+  - Rebuilding the village is a goal in itself (light layer, not a factory sim).
+  - Materials gathered while exploring are used to rebuild.
+
+
+FIRST PHASE (first playable)
+----------------------------
+  - The critter village
+  - About 12 forest / meadow rooms
+  - 2-3 starting spells: Light, True Sight (reveals hidden doors/clues),
+    maybe Vine-Grow
+  - 2 secret chains to test the idea
+Focus: mechanics, interactions, colors, scenery size and layouts,
+       puzzle complexity.
+
+
+TECH / PROCESS
+--------------
+  - HTML5 browser game, played on phone.
+  - Public GitHub repo: Hexwood (Todd's account).
+  - Simple version numbers (v1, v2, v3...).
+  - Don't build/package after every change. Collect notes and changes,
+    then build and package once at the end.
+
+
+OPEN QUESTIONS
+--------------
+  - Full spell list beyond the first 2-3
+  - What the village needs to rebuild, and what rebuilding unlocks
+  - Which materials exist in the forest/meadow
+  - Art style details (dedicated session)
+  - Save system details
+  - Later regions beyond forest and meadow (purple mountains?)
+
+
+SESSION LOG
+-----------
+2026-11-12  Design session. Chose concept, hero, controls, setting, creature
+            un-hexing, secret chains, Clue Journal, critter village, first-phase
+            scope, and the name Hexwood. No code yet.
+
+
+TODD'S NOTES
+------------
+(add anything here between sessions)
+
