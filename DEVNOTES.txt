@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v3 (Nov 13, 2026)
+Current version: v4 (Nov 14, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -272,7 +272,47 @@ Residents: freed critters move in (chipmunks, squirrels, rabbits, raccoons,
   owls, birds of a few colors, mice; open to more). Cats OK but no pets or
   familiars; Fennel is the one companion.
 Commerce: none, or barter at most. Fixed-up shops are mostly for the hero.
-OPEN: restocking (how does the leather shop get more leather?).
+Restocking: residents restock their own shops. You trade them treats and
+  special ingredients; you never grind wheat by the wagon. (Todd's example:
+  bring the mill a treat made from the mill's own flour plus things you
+  find, and get flour or cornmeal for spells in return.)
+Library idea: bark/inkberries -> paper-maker next door makes parchment, so
+  books can be made. Found books may be tattered; someone copies them into
+  a fresh blank book.
+Leather: MUSHROOM LEATHER from tinder fungus (shelf mushrooms on dead
+  trees). No hides. (Todd: yes.)
+Bridges: the middle crossing is broken and needs repair. The west road over
+  the north bridge is blocked by fallen trees; cleared when we design the
+  area beyond.
+Smithy: makes the MACHETE first (vines, thickets, weeds on fruit trees,
+  hidden doors/roads), then a SILVER BAND: a double ring wrapped around an
+  orb like a pendant. Permanent part of that orb; it holds 6 charges.
+
+v4 BUILT (Nov 14):
+  - The Old Road (new map, west of the hut yard): grassy, a few trees, the
+    brook along the south. Dead trees (dry bark), rusty iron rocks
+    (iron-stone), an apple tree choked by weeds (machete frees it, then
+    apples regrow), thickets, 3 hexed creatures, a signpost.
+  - Thistledown (placeholder name, easy to change), built from Todd's map.
+    All 12 buildings, gray and hexed. 4 can be restored:
+      Bakery: cast a Kindle Cube beside it -> Rosie and another rabbit.
+        Trades: berry tart (2 inkberries + 2 strawberries), apple turnover
+        (2 apples).
+      Smithy: Kindle Cube -> Bruno the badger. Trades: machete (2 iron-stone
+        + dry bark + berry tart), then silver orb band (2 iron-stone + tart).
+      Bramble Cottage: vines cut with the machete -> squirrels move in.
+      Lantern Cottage: shine Light in the dark window -> the 6 chipmunks
+        move from the hollow into town.
+    Broken bridge and fallen trees have look-text for later.
+  - Spell #4 KINDLE (cube): the third Write (hollow Wisp Feather) writes it.
+    Dry bark -> tinder (mortar), + ash -> Ember Cube (bench), Fennel
+    enchants. Cast standing beside the bakery or smithy. One cube per fire.
+  - Fennel follows you on all outdoor maps once she's out.
+  - SECOND SECRET CHAIN: free the 3 hexed songbirds (blue, red, yellow).
+    They sing, a clue drops, they perch by the library. The brambles beside
+    the library hide an old chest (machete): Sturdy Boots (walk faster) and
+    a Wisp Feather.
+  - Freeing all village creatures (3 birds, 2 mice) colors the streets.
 
 
 NEXT UP
@@ -309,6 +349,9 @@ SESSION LOG
             Fennel's gift, crafting shows formulas, painted art, install.
             Todd's v2 notes -> v3: Fennel request fix, messages close when
             you walk, tap-only Fennel outdoors, quiet kindness.
+2026-11-13  Designed the village with Todd (his map). Built v4: Old Road,
+  /14       Thistledown, Kindle, 4 restorable buildings, machete, orb band,
+            songbird chain.
 
 
 TODD'S NOTES

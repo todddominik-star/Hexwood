@@ -23,7 +23,8 @@ const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x 
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
 
 // ================================================================ maps
-const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x']);
+const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't']);
+const OUTDOOR = ['out', 'road', 'village'];
 const MAPS = {};
 function addMap(id, rows, dark) {
   MAPS[id] = { id, rows: rows.map(r => r.split('')), w: rows[0].length, h: rows.length, objs: OBJECTS.filter(o => o.map === id), solid: null };
@@ -32,6 +33,8 @@ function addMap(id, rows, dark) {
 addMap('hut', HUT_MAP);
 addMap('cellar', CELLAR_MAP);
 addMap('out', buildOutdoor());
+addMap('road', buildRoad());
+addMap('village', buildVillage());
 
 // ================================================================ state
 const SAVE_KEY = 'hexwood_save_v1';  // v2 keeps the same save slot
@@ -40,7 +43,8 @@ function newState() {
   return {
     ver: 1, map: 'hut', px: 3.5, py: 3.5, dir: 1,
     flags: {}, inv: {}, pouch: [], pages: {}, late: {}, revealed: {}, lanterns: {}, freed: {},
-    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1 },
+    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1 },
+    cut: {}, visited: {},
     clues: [], curios: {}, gifts: {}, maxCharge: 3, time: 0,
   };
 }
@@ -85,7 +89,8 @@ const G = {
     save();
   },
   goMap(map, x, y) {
-    startFade(() => { S.map = map; S.px = x; S.py = y; curZone = null; if (map !== 'out') { S.fairyOut = false; fairyRT = null; } spawnCreatures(); save(); });
+    startFade(() => { S.map = map; S.px = x; S.py = y; curZone = null; if (!OUTDOOR.includes(map)) { S.fairyOut = false; fairyRT = null; } else if (fairyRT) { fairyRT = { x: x - 0.8, y: y - 0.8 }; }
+      if (!S.visited[map]) { S.visited[map] = true; if (map === 'village') setTimeout(() => notice(`🏘️ Welcome to ${VILLAGE_NAME}. Every house is gray and hexed... but you can help.`), 1200); } spawnCreatures(); save(); });
   },
   freeFairy() {
     G.setFlag('fairyFree');
@@ -101,9 +106,9 @@ const G = {
   talkFairy() { talkFairy(); },
   openStation(st) { openStation(st); },
   openBureau() { openBureau(); },
-  orbsNeedingCharge: () => S.pouch.some(p => SPELL_ITEMS[p.type].shape === 'orb' && p.charges < S.maxCharge),
+  orbsNeedingCharge: () => S.pouch.some(p => SPELL_ITEMS[p.type].shape === 'orb' && p.charges < (p.max || S.maxCharge)),
   recharge() {
-    S.pouch.forEach(p => { if (SPELL_ITEMS[p.type].shape === 'orb') p.charges = S.maxCharge; });
+    S.pouch.forEach(p => { if (SPELL_ITEMS[p.type].shape === 'orb') p.charges = p.max || S.maxCharge; });
     chime(2); burst(11.5, 5, '#ffd27a', 20); save();
     say(['You hold your orbs near the embers. They drink in the warmth and glow brightly again.']);
   },
@@ -117,6 +122,26 @@ const G = {
     const it = ITEMS[id];
     notice(`${it.icon} You found a curio: ${it.name}! ${it.desc}`, 'journal');
   },
+  burstAt(x, y, c) { burst(x, y, c, 24); },
+  unbandedOrbs: () => S.pouch.filter(p => SPELL_ITEMS[p.type].shape === 'orb' && !p.band),
+  visitShop(st) { visitShop(st); },
+  openHome1() {
+    S.flags.home1Open = true; rebuildSolids(); chime(3); burst(16, 11, '#c8f0a0', 30);
+    G.setZone('v_home1', 0); spawnCreatures(); save();
+    say(['You hack away the hexed vines. They curl up and crumble to dust.', 'The door swings open, and a family of squirrels scampers in from the trees. They chatter at you happily.']);
+  },
+  openHome2() {
+    S.flags.home2Open = true; chime(3); burst(16, 17.5, '#fff3b0', 30);
+    G.setZone('v_home2', 0); spawnCreatures(); save();
+    say(['You hold your light to the window. The darkness inside shrinks back, then bursts like a soap bubble.',
+      'Warm light fills Lantern Cottage... and here come the chipmunks from the hollow, all six of them, to move in!']);
+  },
+  openChest() {
+    S.flags.chestOpen = true; chime(4); burst(7.5, 2.5, '#fff3b0', 30);
+    S.inv.boots = 1; G.give('wisp'); save();
+    resolveClue('birds');
+    say(['The old chest creaks open. Inside: a pair of sturdy walking boots and a glowing Wisp Feather.', 'You pull the boots on. They fit perfectly, and your steps feel lighter.']);
+  },
   hollowCheck() {
     if (G.flag('acornTaken') && G.flag('hollowWisp')) {
       resolveClue('chipmunks');
@@ -126,7 +151,7 @@ const G = {
 };
 
 // ================================================================ zones
-function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out); }
+function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village); }
 function zoneAt(map, x, y) {
   const list = ZONES[map];
   for (const z of list) { const r = z.rect; if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return z; }
@@ -169,6 +194,7 @@ function solidAt(map, tx, ty) {
   if (tx < 0 || ty < 0 || tx >= m.w || ty >= m.h) return true;
   const c = m.rows[ty][tx];
   if (c === 'x') return !(S.revealed.hollowgate && G.flag('chainChip'));
+  if (c === 't') return !S.cut[map + ':' + tx + ',' + ty];
   if (SOLID_TILES.has(c)) return true;
   return m.solid && m.solid[ty * m.w + tx] === 1;
 }
@@ -205,7 +231,7 @@ function findPath(map, sx, sy, gx, gy) {
 
 // ================================================================ creatures
 function spawnCreatures() {
-  creatures = CREATURES.filter(d => d.map === S.map).map(d => {
+  creatures = CREATURES.filter(d => d.map === S.map && !(d.species === 'chipmunk' && G.flag('home2Open'))).map(d => {
     const c = { def: d, id: d.id, x: d.x, y: d.y, hx: d.x, hy: d.y, mode: S.freed[d.id] ? 'free' : 'hexed', t: Math.random() * 10, tx: d.x, ty: d.y, path: null, gone: false, face: 1 };
     if (d.lead && G.flag(d.lead.flag)) { c.hx = c.x = d.lead.x; c.hy = c.y = d.lead.y; }
     if (d.species === 'chipmunk' && G.flag('chipsInHollow')) {
@@ -213,10 +239,12 @@ function spawnCreatures() {
       c.hx = c.x = 2.6 + (i % 3) * 1.4; c.hy = c.y = 2.6 + Math.floor(i / 3) * 1.6;
     }
     if (d.lead && S.freed[d.id] && !G.flag(d.lead.flag)) { c.mode = 'lead'; }
+    if (d.species === 'bird' && G.flag('chainBird')) c.gone = true;   // the songbirds now live by the library
     return c;
   });
+  RESIDENTS.filter(r => r.map === S.map && r.when()).forEach(r => creatures.push({ def: r, id: r.id, x: r.x, y: r.y, hx: r.x, hy: r.y, mode: 'free', t: Math.random() * 10, tx: r.x, ty: r.y, face: 1, resident: true }));
 }
-function speciesName(s) { return { chipmunk: 'chipmunk', butterfly: 'butterfly', bunny: 'bunny', frog: 'frog', firefly: 'firefly' }[s]; }
+function speciesName(s) { return { chipmunk: 'chipmunk', butterfly: 'butterfly', bunny: 'bunny', frog: 'frog', firefly: 'firefly', bird: 'songbird', mouse: 'mouse', squirrel: 'squirrel', badger: 'badger' }[s] || s; }
 
 function unhex(c) {
   const d = c.def;
@@ -237,6 +265,8 @@ function unhex(c) {
   // secret chain: six chipmunks (no hint until it completes)
   const chips = CREATURES.filter(k => k.species === 'chipmunk');
   if (!G.flag('chainChip') && chips.every(k => S.freed[k.id])) setTimeout(startChain, 900);
+  const birds = CREATURES.filter(k => k.species === 'bird');
+  if (!G.flag('chainBird') && d.species === 'bird' && birds.every(k => S.freed[k.id])) setTimeout(startBirdChain, 900);
 }
 
 function startChain() {
@@ -254,6 +284,13 @@ function startChain() {
     c.mode = 'gather'; c.path = findPath('out', c.x, c.y, S.px, S.py);
   });
   chain = { phase: 'gather', t: 0 };
+}
+function startBirdChain() {
+  S.flags.chainBird = true; rebuildSolids(); save();
+  addClue('birds');
+  chime(4);
+  notice('🎶 Three songbirds circle above you, singing together. A feather-light note drifts down: a new clue is in your Journal.', 'journal');
+  creatures.filter(c => c.def.species === 'bird' && !c.resident).forEach((c, i) => { c.mode = 'fly'; c.flyTo = { x: 7.8 + i * 0.4, y: 5.3 }; });
 }
 function spotNear(x, y, r, seed) {
   for (let k = 0; k < 40; k++) {
@@ -316,6 +353,12 @@ function updateCreatures(dt) {
       }
       continue;
     }
+    if (c.mode === 'fly') {
+      const dx = c.flyTo.x - c.x, dy = c.flyTo.y - c.y, d = Math.hypot(dx, dy);
+      if (d < 0.2) { c.gone = true; burst(c.x, c.y, '#fff6c8', 10); if (S.map === 'village' && !creatures.some(k => k.mode === 'fly' && !k.gone)) spawnCreatures(); }
+      else { c.x += dx / d * Math.min(d, 4 * dt); c.y += dy / d * Math.min(d, 4 * dt); c.face = dx < 0 ? -1 : 1; }
+      continue;
+    }
     if (c.mode === 'lead') {
       const L = c.def.lead;
       if (!c.path) c.path = findPath(S.map, c.x, c.y, L.x, L.y) || [];
@@ -327,7 +370,7 @@ function updateCreatures(dt) {
       continue;
     }
     // free: gentle wander near home
-    if (sp === 'butterfly' || sp === 'firefly') {
+    if (sp === 'butterfly' || sp === 'firefly' || sp === 'bird') {
       c.x = c.hx + Math.sin(c.t * 0.6) * 1.6 + Math.sin(c.t * 1.7) * 0.3;
       c.y = c.hy + Math.cos(c.t * 0.45) * 1.1;
       c.face = Math.cos(c.t * 0.6) > 0 ? 1 : -1;
@@ -420,10 +463,40 @@ function useSpell(i) {
     burst(S.px, S.py, '#fff0a8', 20);
     if (revealPage('light')) learned('light');
     save();
+  } else if (item.type === 'kindlecube') {
+    const target = MAPS[S.map].objs.find(o => o.kindle && !G.flag(o.kindle) && Math.hypot(S.px - clamp(S.px, o.tx, o.tx + o.tw), S.py - clamp(S.py, o.ty, o.ty + o.th)) < 1.4);
+    if (!target) { say(['You turn the warm cube over in your hand. Nothing nearby wants to burn forever.', '(Stand right beside something that needs a fire, then cast it.)']); return; }
+    S.pouch.splice(i, 1);
+    kindleBuilding(target);
+    if (revealPage('kindle')) setTimeout(() => learned('kindle'), 1500);
   } else if (item.type === 'seekerorb') {
     item.charges--; seeker = { t: 0 }; blip(600);
     save();
   }
+}
+function kindleBuilding(o) {
+  S.flags[o.kindle] = true; rebuildSolids(); save();
+  chime(4); burst(o.tx + o.tw / 2, o.ty + o.th / 2, '#ffb04a', 36);
+  if (o.id === 'bakery') {
+    G.setZone('v_bakery', 0); spawnCreatures();
+    say(['The cube flares in your hand and leaps into the oven. The bricks glow orange, and the fire settles in to stay.',
+      'Warm bread smell drifts out the door... and two rabbits hop in from the meadow, already tying on aprons.',
+      'ROSIE: Oh! An oven that never goes cold! Come in, come in. Bring me ingredients and I\'ll bake you something lovely.']);
+  } else if (o.id === 'smithy') {
+    G.setZone('v_smithy', 0); spawnCreatures();
+    say(['The cube flies into the forge with a roar. White-hot coals bloom and settle into a steady, endless glow.',
+      'A badger in a leather apron trundles up the street, sniffing the air.',
+      'BRUNO: A proper forge again! Bring me iron-stone and I\'ll make you something useful. A bite of something sweet wouldn\'t hurt either.']);
+  }
+}
+function visitShop(st) {
+  const talk = {
+    bakery: ['ROSIE: Bring me two inkberries and two wild strawberries, and I\'ll bake you a berry tart. Two apples makes a turnover.', 'ROSIE: Everyone in this village has a sweet tooth. Bruno most of all.'],
+    smithy: G.flag('macheteGot')
+      ? ['BRUNO: Two iron-stones and a tart, and I\'ll wrap one of your orbs in a silver band. Twice the magic it can hold.']
+      : ['BRUNO: You\'ll want a machete for all these vines and brambles. Two iron-stones, a bit of dry bark for the handle, and one of Rosie\'s berry tarts.', 'BRUNO: Rusty red rocks along the old road are full of iron.'],
+  }[st];
+  choice(st === 'bakery' ? 'ROSIE: Hello, dear! What\'ll it be?' : 'BRUNO: Hmph. Hello. Need something?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(talk); else if (i === 1) openStation(st); });
 }
 function learned(p) {
   chime(4);
@@ -463,11 +536,11 @@ function finishSeeker() {
 }
 
 // ================================================================ Fennel
-const TREATS = ['honeycake', 'dew', 'button', 'honey', 'strawberry', 'inkberry'];
+const TREATS = ['honeycake', 'dew', 'button', 'honey', 'strawberry', 'inkberry', 'apple', 'berrytart', 'turnover'];
 function treatsHeld() { return TREATS.filter(k => G.has(k)); }
 function objPos(id) { const o = OBJECTS.find(o => o.id === id); return { map: o.map, x: o.tx + o.tw / 2, y: o.ty + o.th / 2 }; }
 function fennelPos() {
-  if (S.map === 'out' && S.fairyOut && fairyRT) return { map: 'out', x: fairyRT.x, y: fairyRT.y };
+  if (OUTDOOR.includes(S.map) && S.fairyOut && fairyRT) return { map: S.map, x: fairyRT.x, y: fairyRT.y };
   return objPos('fairy');
 }
 // Requests she makes as you progress. Handing over the item earns a hint and kindness.
@@ -492,7 +565,8 @@ function teachUnhex() {
 function giveTreat(k) {
   const req = pendingRequest();
   G.take(k); S.favor = (S.favor || 0) + 1;
-  S.given = S.given || {}; S.given[k] = true;
+  S.given = S.given || {}; S.cut = S.cut || {}; S.visited = S.visited || {};
+  for (const z of allZones()) if (S.zones[z.id] === undefined) S.zones[z.id] = 1; S.given[k] = true;
   burst(fennelPos().x, fennelPos().y, '#fff3b0', 16); blip(1400); save();
   let lines = [`You give Fennel the ${ITEMS[k].name}.`];
   if (k === 'honey' && !G.flag('unhexKnown')) return lines.concat(teachUnhex());
@@ -596,12 +670,39 @@ function smartHint() {
   // Outdoors
   if (F('doorOpen')) {
     if (F('unhexKnown')) {
-      CREATURES.forEach(c => { if (!S.freed[c.id]) { const z = ZONES.out.find(z => z.id === c.zone); T.push({ map: 'out', x: c.x, y: c.y, text: `I can feel a hexed ${c.species} somewhere around ${z ? z.name : 'here'}.` }); } });
+      CREATURES.forEach(c => { if (!S.freed[c.id]) { const z = allZones().find(z => z.id === c.zone); T.push({ map: c.map, x: c.x, y: c.y, text: `I can feel a hexed ${speciesName(c.species)} somewhere around ${z ? z.name : 'here'}.` }); } });
     }
     if (pg.light && pg.light.cast && !F('groveLit')) ['lantern1', 'lantern2', 'lantern3'].forEach(id => { if (!S.lanterns[id]) at(id, 'The birch grove has old lanterns. Stand close to one while your Light glows.'); });
     if (seekOrb) OBJECTS.forEach(o => { if (o.secret && !S.revealed[o.id] && (!o.vis || o.vis())) { const z = zoneAt(o.map, o.tx, o.ty); T.push({ map: o.map, x: o.tx + 0.5, y: o.ty + 0.5, text: `Something shimmers around ${z.name}. Try your Seeker Orb there.` }); } });
     if (F('bunnyLed') && !F('bellTaken')) at('bell', 'The bunny led you somewhere. Did you pick up what it found?');
     if (F('chipsInHollow') && S.revealed.hollowgate && (!F('acornTaken') || !F('hollowWisp'))) at('hollowwisp', 'The chipmunks have treasures in their hollow.');
+  }
+  // the road to town and the village
+  if (F('doorOpen') && !S.visited.road) T.push({ map: 'out', x: 0.5, y: 17.5, text: `There's a path west from the yard. The old road leads to ${VILLAGE_NAME}. It's hexed too, poor thing.` });
+  if (pg.kindle) {
+    const need = ['bakeryLit', 'smithyLit'].filter(k => !F(k)).length;
+    const have = S.pouch.filter(p => p.type === 'kindlecube').length + G.count('embercube');
+    if (need > have) {
+      if (has('embercube')) now('Bring me the Ember Cube and choose "Enchant".');
+      else {
+        if (!has('tinder')) { if (has('bark')) at('mortar', 'Grind the dry bark into tinder at the mortar.'); else T.push({ map: 'road', x: 5.5, y: 4.5, text: 'Dead trees along the old road have dry bark. Peel some for the Kindle spell.' }); }
+        if (!has('ash')) at('hearth', 'Kindle needs a bit of hearth ash.');
+        if (has('tinder') && has('ash')) at('bench', 'Join the ash and tinder at the workbench into an Ember Cube.');
+      }
+    }
+    if (S.pouch.some(p => p.type === 'kindlecube')) {
+      if (!F('bakeryLit')) at('bakery', 'The bakery oven in town is stone cold. Stand beside the bakery and cast your Kindle Cube.');
+      if (!F('smithyLit')) at('smithy', 'The smithy\'s forge is cold. Stand beside it and cast a Kindle Cube.');
+    }
+  }
+  if (S.visited.village && !F('home2Open')) at('home2', 'One cottage in town has windows so dark they swallow light. Your Light Orb might chase that out.');
+  if (F('bakeryLit') && !has('berrytart') && (!F('macheteGot') || G.unbandedOrbs().length)) at('bakery', 'Rosie bakes berry tarts from two inkberries and two wild strawberries. Bruno loves them.');
+  if (F('smithyLit') && G.count('ironstone') < 2 && (!F('macheteGot') || G.unbandedOrbs().length)) at('iron1', 'Bruno needs iron-stone. Look for the rusty red rocks on the old road.');
+  if (F('smithyLit') && !F('macheteGot') && G.count('ironstone') >= 2 && has('berrytart')) at('smithy', 'You have what Bruno wants. Go see him about a machete!');
+  if (has('machete')) {
+    if (!F('home1Open')) at('home1', 'Bramble Cottage is buried in hexed vines. Your machete could clear them.');
+    if (!F('weedsCut')) at('appletree', 'There\'s an apple tree on the old road, choked with weeds. Cut it free!');
+    if (F('chainBird') && !F('chestOpen')) at('chest', 'The songbirds\' clue... brambles beside the library. Your machete can reach whatever is hiding there.');
   }
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
@@ -676,6 +777,19 @@ function findActs() {
     if (o.id === 'fairy') { d = Math.hypot(S.px - (o.tx + 0.5), S.py - (o.ty + 0.4)) - 0.3; }
     if (d < 0.95) out.push({ d, a, x: o.tx, y: o.ty, w: o.tw, h: o.th, id: o.id });
   }
+  for (let ty = Math.floor(S.py) - 1; ty <= Math.floor(S.py) + 1; ty++) for (let tx = Math.floor(S.px) - 1; tx <= Math.floor(S.px) + 1; tx++) {
+    const c = m.rows[ty] && m.rows[ty][tx];
+    if (c !== 'K' && c !== 't') continue;
+    const key = S.map + ':' + tx + ',' + ty;
+    if (c === 't' && S.cut[key]) continue;
+    const d = Math.hypot(S.px - clamp(S.px, tx, tx + 1), S.py - clamp(S.py, ty, ty + 1));
+    if (d >= 0.95) continue;
+    let a;
+    if (c === 'K') a = G.count('bark') < 3 ? { label: 'Peel some dry bark', fn: () => G.give('bark') } : { label: 'Look at the dead tree', fn: () => say(['A long-dead tree, its bark dry and papery. Shelf mushrooms grow in its cracks.']) };
+    else a = G.has('machete') ? { label: 'Cut the thicket', fn: () => { S.cut[key] = true; burst(tx + 0.5, ty + 0.5, '#9ad370', 20); blip(500); save(); } }
+      : { label: 'Look at the thicket', fn: () => say(['A thorny tangle of brambles. You\'d need a sharp blade to get through.']) };
+    out.push({ d, a, x: tx, y: ty - (c === 'K' ? 0.6 : 0), w: 1, h: c === 'K' ? 1.6 : 1, id: key });
+  }
   for (const c of creatures) {
     if (c.mode !== 'hexed') continue;
     const d = Math.hypot(S.px - c.x, S.py - c.y) - 0.3;
@@ -695,7 +809,7 @@ function handleTap(x, y) {
   for (const t of acts) if (t.pill && inRect(x, y, t.pill)) { doTarget(t); return; }
   for (const t of acts) if (t.box && inRect(x, y, t.box)) { doTarget(t); return; }
   // Fennel outdoors: only when you tap her
-  if (S.map === 'out' && S.fairyOut && fairyRT) {
+  if (OUTDOOR.includes(S.map) && S.fairyOut && fairyRT) {
     const fx = fairyRT.x * TS - camX, fy = fairyRT.y * TS - camY - TS * 0.1;
     if (Math.hypot(x - fx, y - fy) < TS * 0.7) { audioInit(); talkFairy(); }
   }
@@ -812,7 +926,7 @@ function openPanel(kind) {
   let title = '', html = '';
   if (kind === 'satchel') {
     title = '🎒 Satchel';
-    const groups = [['ingredient', 'Ingredients'], ['worked', 'Worked'], ['trinket', 'Treats & Trinkets'], ['tool', 'Tools']];
+    const groups = [['ingredient', 'Ingredients'], ['worked', 'Worked'], ['trinket', 'Treats & Trinkets'], ['tool', 'Tools'], ['gear', 'Gear']];
     let any = false;
     groups.forEach(([k, label]) => {
       const items = Object.keys(S.inv).filter(id => ITEMS[id] && ITEMS[id].kind === k && S.inv[id] > 0);
@@ -828,11 +942,11 @@ function openPanel(kind) {
     html += S.pouch.map((p, i) => {
       const d = SPELL_ITEMS[p.type];
       const known = S.pages[d.page] && S.pages[d.page].cast;
-      const nm = known ? d.name : (d.shape === 'orb' ? 'Unknown Orb' : 'Unknown Powder');
-      const ch = d.shape === 'orb' ? `<span class="charges">${'●'.repeat(p.charges)}${'○'.repeat(Math.max(0, S.maxCharge - p.charges))}</span>` : '<span class="charges">single use</span>';
-      return `<div class="spell"><span class="ic">${d.icon}</span><span class="nm">${nm}<br>${ch}</span><button data-use="${i}">Cast</button></div>`;
+      const nm = known ? d.name : ({ orb: 'Unknown Orb', powder: 'Unknown Powder', cube: 'Unknown Cube' }[d.shape]);
+      const ch = d.shape === 'orb' ? `<span class="charges">${'●'.repeat(p.charges)}${'○'.repeat(Math.max(0, (p.max || S.maxCharge) - p.charges))}${p.band ? ' · silver band' : ''}</span>` : d.shape === 'cube' ? '<span class="charges">cast beside its target</span>' : '<span class="charges">single use</span>';
+      return `<div class="spell"><span class="ic${p.band ? ' banded' : ''}">${d.icon}</span><span class="nm">${nm}<br>${ch}</span><button data-use="${i}">Cast</button></div>`;
     }).join('');
-    html += `<p class="muted small">${SHAPES.powder}. ${SHAPES.orb}.</p>`;
+    html += `<p class="muted small">${SHAPES.powder}. ${SHAPES.orb}. ${SHAPES.cube}.</p>`;
   } else if (kind === 'book') {
     title = '📖 Spellbook';
     PAGE_ORDER.forEach((p, n) => { if (S.pages[p]) html += pageHtml(p, n); });
@@ -863,13 +977,14 @@ function openPanel(kind) {
 }
 
 function openStation(st, backTo) {
-  const list = RECIPES.filter(r => r.station === st && S.pages[r.page]);
+  const list = RECIPES.filter(r => r.station === st && (r.page ? S.pages[r.page] : (!r.req || r.req())));
   let html = '';
+  if ((st === 'bakery' || st === 'smithy') && !list.length) html += '<p class="muted">Nothing to trade right now.</p>';
   if (!list.length) html += '<p class="muted">Nothing you know how to make here yet.</p>';
   list.forEach(r => {
     const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k]));
-    const out = r.makes ? ITEMS[r.makes] : SPELL_ITEMS[r.spell];
-    const known = r.spell ? (S.pages[r.page].cast ? out.name : (out.shape === 'orb' ? 'an unknown orb' : 'an unknown powder')) : out.name;
+    const out = r.special ? { icon: r.icon, name: r.label } : r.makes ? ITEMS[r.makes] : SPELL_ITEMS[r.spell];
+    const known = r.spell ? (S.pages[r.page].cast ? out.name : ({ orb: 'an unknown orb', powder: 'an unknown powder', cube: 'an unknown cube' }[out.shape])) : out.name;
     html += `<div class="recipe"><div class="out">${out.icon} ${r.verb} → ${known}</div><div class="needs">` +
       Object.keys(r.needs).map(k => `<span class="${G.has(k, r.needs[k]) ? 'have' : 'miss'}">${ITEMS[k].icon} ${ITEMS[k].name} ${G.count(k)}/${r.needs[k]}</span>`).join('') + '</div>';
     // shortcut: missing a ground ingredient that you can grind right next door
@@ -881,10 +996,10 @@ function openStation(st, backTo) {
     html += `<button data-make="${r.id}" ${ok ? '' : 'disabled'}>${r.verb}</button></div>`;
   });
   // the formulas from the book, right where you work
-  const pages = [...new Set(list.map(r => r.page))];
+  const pages = [...new Set(list.map(r => r.page).filter(Boolean))];
   if (pages.length) html += '<h3>📖 From your Spellbook</h3>' + pages.map(p => pageHtml(p, PAGE_ORDER.indexOf(p), true)).join('');
   if (backTo) html = `<button class="side back" data-back="1">← Back to the ${STATION_NAMES[backTo]}</button>` + html;
-  $('ptitle').textContent = (st === 'fairy' ? '🧚 ' : st === 'mortar' ? '🥣 ' : '🔨 ') + STATION_NAMES[st];
+  $('ptitle').textContent = ({ fairy: '🧚 ', mortar: '🥣 ', bench: '🔨 ', bakery: '🍞 ', smithy: '⚒️ ' }[st]) + STATION_NAMES[st];
   $('pbody').innerHTML = html;
   $('pbody').scrollTop = 0;
   $('pbody').querySelectorAll('[data-make]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); make(b.dataset.make, backTo); }));
@@ -897,9 +1012,22 @@ function make(id, backTo) {
   if (!Object.keys(r.needs).every(k => G.has(k, r.needs[k]))) return;
   if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(fennelTired()); return; }
   if (r.spell && S.pouch.length >= 6) { closePanel(); say(['Your pouch is full.']); return; }
+  if (r.special === 'band') {
+    const orbs = G.unbandedOrbs();
+    closePanel();
+    choice('BRUNO: Which orb shall I band?', orbs.map(o => SPELL_ITEMS[o.type].name).concat(['Never mind']), i => {
+      if (i >= orbs.length) return;
+      Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
+      const o = orbs[i]; o.band = true; o.max = 6; o.charges = 6; chime(3); save();
+      say([`Bruno heats a thin silver wire until it glows, then wraps it twice around your ${SPELL_ITEMS[o.type].name}, like a pendant.`, `BRUNO: There. It'll hold six charges now. Don't drop it.`]);
+    });
+    return;
+  }
   Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
   if (r.station === 'fairy') S.favor--;
   if (S.map === 'hut') burst(S.px, S.py - 0.5, '#fff3b0', 12);
+  if (r.makes === 'machete') { G.give('machete'); S.flags.macheteGot = true; save(); closePanel(); chime(3); say(['Bruno hammers, quenches, and polishes. He hands you a fine machete with a bark-wrapped grip.', 'BRUNO: For vines and brambles. Not fingers.', '(You can cut thickets, vines and weeds now.)']); return; }
+  if (r.station === 'bakery') { G.give(r.makes); closePanel(); chime(2); say([`Rosie bustles about, and soon hands you a warm ${ITEMS[r.makes].name}.`, 'ROSIE: Fresh from the oven! It never goes cold now, you know.']); return; }
   if (r.makes) {
     G.give(r.makes); blip(800);
     // stay at the station (or hop back) so the next step is one tap away
@@ -911,7 +1039,7 @@ function make(id, backTo) {
   const d = SPELL_ITEMS[r.spell];
   S.pouch.push({ type: r.spell, charges: d.charges || 1 });
   chime(2); save();
-  const nm = S.pages[r.page].cast ? d.name : (d.shape === 'orb' ? 'an unknown orb' : 'an unknown powder');
+  const nm = S.pages[r.page].cast ? d.name : ({ orb: 'an unknown orb', powder: 'an unknown powder', cube: 'an unknown cube' }[d.shape]);
   say(r.station === 'fairy'
     ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch.`]
     : [`You work everything together on the bench into ${nm}.`, `${d.icon} It goes into your Spell Pouch. Open the Pouch to cast it.`]);
@@ -1004,7 +1132,7 @@ function update(dt) {
   if (!paused && !seeker) {
     const [mx, my] = moveInput();
     if (mx || my) {
-      const sp = 3.6 * dt, r = 0.3;
+      const sp = (G.has('boots') ? 4.3 : 3.6) * dt, r = 0.3;
       const nx = S.px + mx * sp, ny = S.py + my * sp;
       if (boxFree(S.map, nx, S.py, r)) S.px = nx;
       if (boxFree(S.map, S.px, ny, r)) S.py = ny;
@@ -1014,6 +1142,7 @@ function update(dt) {
   }
   updateCreatures(dt);
   updateChain(dt);
+  edgeExits();
   particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; });
   particles = particles.filter(p => p.life > 0);
   // zone entry
@@ -1024,9 +1153,18 @@ function update(dt) {
   refreshHud();
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
 }
+function edgeExits() {
+  if (fadeDir || paused) return;
+  const m = MAPS[S.map];
+  if (S.map === 'out' && S.px < 0.45) G.goMap('road', MAPS.road.w - 0.9, 8.5);
+  else if (S.map === 'road' && S.px > m.w - 0.45) G.goMap('out', 0.9, 17.5);
+  else if (S.map === 'road' && S.px < 0.45) G.goMap('village', MAPS.village.w - 0.9, 25.5);
+  else if (S.map === 'village' && S.px > m.w - 0.45) G.goMap('road', 0.9, 8.5);
+}
 function updateFairy(dt) {
-  if (S.map !== 'out' || !G.flag('fairyFree')) return;
+  if (!OUTDOOR.includes(S.map) || !G.flag('fairyFree')) return;
   if (!S.fairyOut) {
+    if (S.map !== 'out') return;
     const r = OBJECTS.find(o => o.id === 'rune');
     if (S.px > r.tx && S.px < r.tx + r.tw && S.py > r.ty && S.py < r.ty + r.th) {
       S.fairyOut = true; fairyRT = { x: 7.8, y: 15.4 }; chime(2);
@@ -1089,7 +1227,11 @@ function render(t) {
   const isHedge = (x, y) => { const c = m.rows[y] && m.rows[y][x]; return c === 'h' || (c === 'x' && !hollowOpen()); };
   for (let y = y0; y <= y1 + 3 && y < m.h; y++) for (let x = Math.max(0, x0 - 1); x <= Math.min(m.w - 1, x1 + 1); x++) {
     const c = m.rows[y][x];
-    if (c === 'T' || c === 'B') {
+    if (c === 'K') {
+      list.push({ y: y + 0.95, f: () => drawSprite('dead', (hash(x, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95, Math.sin(t * 0.6 + x) * 0.01) });
+    } else if (c === 't' && !S.cut[S.map + ':' + x + ',' + y]) {
+      list.push({ y: y + 0.9, f: () => drawSprite('bramble', (hash(x, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.98) });
+    } else if (c === 'T' || c === 'B') {
       const sway = Math.sin(t * 0.8 + x * 0.7 + y) * 0.025;
       list.push({ y: y + 0.95, f: () => drawSprite(treeKind(c, x, y, m), (hash(x, y + 5) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95, sway) });
     } else if (c === 'b') {
@@ -1101,7 +1243,7 @@ function render(t) {
   }
   creatures.forEach(c => { if (!c.gone) list.push({ y: c.y + 0.2, f: () => drawCreature(c, t) }); });
   list.push({ y: S.py + 0.3, f: () => drawHero(t) });
-  if (S.map === 'out' && S.fairyOut && fairyRT) list.push({ y: fairyRT.y + 1, f: () => DRAW.fairy(null, fairyRT.x * TS - camX - TS / 2, fairyRT.y * TS - camY - TS * 0.4, TS, TS, 0, t) });
+  if (OUTDOOR.includes(S.map) && S.fairyOut && fairyRT) list.push({ y: fairyRT.y + 1, f: () => DRAW.fairy(null, fairyRT.x * TS - camX - TS / 2, fairyRT.y * TS - camY - TS * 0.4, TS, TS, 0, t) });
   list.sort((a, b) => a.y - b.y).forEach(i => i.f());
 
   // particles
@@ -1236,7 +1378,17 @@ function drawTile(m, tx, ty, x, y, g, t) {
       ctx.fillRect(x, y + TS - 5, TS + 1, 5);
       break;
     }
-    case ',': case 'T': case 'B': case 'H': drawGrass(x, y, g, tx, ty); break;
+    case ',': case 'T': case 'B': case 'H': case 'K': case 't': drawGrass(x, y, g, tx, ty); break;
+    case 'n': {
+      ctx.fillStyle = C('#86c8ea', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      const vert = (m.rows[ty - 1] && 'n='.includes(m.rows[ty - 1][tx])) || (m.rows[ty + 1] && 'n='.includes(m.rows[ty + 1][tx]));
+      ctx.fillStyle = C('#a7794f', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.strokeStyle = C('#7a5432', g); ctx.lineWidth = 2;
+      for (let i = 1; i < 5; i++) { ctx.beginPath(); if (vert) { ctx.moveTo(x, y + i * TS / 5); ctx.lineTo(x + TS, y + i * TS / 5); } else { ctx.moveTo(x + i * TS / 5, y); ctx.lineTo(x + i * TS / 5, y + TS); } ctx.stroke(); }
+      ctx.fillStyle = C('#5f412d', g);
+      if (vert) { ctx.fillRect(x, y, 3, TS + 1); ctx.fillRect(x + TS - 3, y, 3, TS + 1); } else { ctx.fillRect(x, y, TS + 1, 3); ctx.fillRect(x, y + TS - 3, TS + 1, 3); }
+      break;
+    }
     case ':': {
       drawGrass(x, y, g, tx, ty);
       const cols = ['#f7a8c8', '#ffe37a', '#c9b3ff', '#ffffff'];
@@ -1528,6 +1680,80 @@ const DRAW = {
       ctx.fillStyle = C('#3f8a47', g); ctx.beginPath(); ctx.ellipse(px, py, w * 0.14, h * 0.08, i, 0, 7); ctx.fill(); ctx.beginPath(); ctx.ellipse(px + w * 0.06, py + h * 0.05, w * 0.12, h * 0.07, -i, 0, 7); ctx.fill();
       ctx.fillStyle = C('#e8434f', g); ctx.beginPath(); ctx.moveTo(px - w * 0.05, py + h * 0.04); ctx.lineTo(px + w * 0.05, py + h * 0.04); ctx.lineTo(px, py + h * 0.15); ctx.closePath(); ctx.fill(); }
   },
+  building(o, x, y, w, h, g, t) {
+    const b = o.b, lit = o.kindle ? G.flag(o.kindle) : o.id === 'home1' ? G.flag('home1Open') : o.id === 'home2' ? G.flag('home2Open') : false;
+    const gg = lit ? 0 : 1;
+    ctx.fillStyle = 'rgba(30,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w * 0.55, h * 0.14, 0, 0, 7); ctx.fill();
+    const wg = ctx.createLinearGradient(x, 0, x + w, 0); wg.addColorStop(0, C(b.wall, gg)); wg.addColorStop(1, C('#b8a688', gg));
+    ctx.fillStyle = wg; rr(x + w * 0.06, y + h * 0.3, w * 0.88, h * 0.7, 4); ctx.fill();
+    if (b.stone) { ctx.strokeStyle = C('#8a847b', gg, 0.6); ctx.lineWidth = 1.5; for (let r = 0; r < 5; r++) for (let i = 0; i < 6; i++) { rr(x + w * (0.08 + i * 0.145 + (r % 2) * 0.07), y + h * (0.34 + r * 0.12), w * 0.13, h * 0.1, 3); ctx.stroke(); } }
+    else { ctx.fillStyle = C('#7a543b', gg); ctx.fillRect(x + w * 0.06, y + h * 0.3, w * 0.88, h * 0.035); ctx.fillRect(x + w * 0.06, y + h * 0.3, w * 0.03, h * 0.7); ctx.fillRect(x + w * 0.91, y + h * 0.3, w * 0.03, h * 0.7); }
+    const rg = ctx.createLinearGradient(0, y - h * 0.3, 0, y + h * 0.42); rg.addColorStop(0, C(b.roof, gg)); rg.addColorStop(1, C('#3a3040', gg * 0.5 + 0.2));
+    ctx.fillStyle = rg; ctx.beginPath(); ctx.moveTo(x - w * 0.04, y + h * 0.38); ctx.lineTo(x + w * 0.12, y - h * 0.22); ctx.lineTo(x + w * 0.88, y - h * 0.22); ctx.lineTo(x + w * 1.04, y + h * 0.38); ctx.closePath(); ctx.fill();
+    ctx.save(); ctx.clip(); ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1.5;
+    for (let r = 0; r < 6; r++) { const yy = y - h * 0.15 + r * h * 0.1; ctx.beginPath(); ctx.moveTo(x - w * 0.05, yy); ctx.lineTo(x + w * 1.05, yy); ctx.stroke(); }
+    ctx.restore();
+    // chimney (+ smoke when lit)
+    ctx.fillStyle = C('#9d978e', gg); ctx.fillRect(x + w * 0.74, y - h * 0.38, w * 0.09, h * 0.3);
+    if (lit && (b.oven || b.forge || o.id.startsWith('home'))) for (let i = 0; i < 3; i++) { const k = ((t * 0.4 + i / 3) % 1); ctx.fillStyle = `rgba(235,235,240,${0.45 * (1 - k)})`; circ(x + w * 0.785 + Math.sin(t + i) * 4, y - h * 0.4 - k * h * 0.6, TS * (0.08 + k * 0.12)); ctx.fill(); }
+    // windows
+    const dark = b.dark && !lit;
+    [[0.14, 0.48], [0.68, 0.48]].forEach(([a, c]) => {
+      ctx.fillStyle = C('#5f412d', gg); rr(x + w * a - 2, y + h * c - 2, w * 0.18 + 4, h * 0.24 + 4, 3); ctx.fill();
+      const glow = lit && (b.oven || b.forge) ? '#ffb05a' : lit ? '#ffe9a8' : '#cfeaff';
+      ctx.fillStyle = dark ? '#120e18' : C(glow, gg); rr(x + w * a, y + h * c, w * 0.18, h * 0.24, 2); ctx.fill();
+      if (dark) { ctx.fillStyle = 'rgba(160,110,220,0.5)'; circ(x + w * (a + 0.06), y + h * (c + 0.09), 2); ctx.fill(); circ(x + w * (a + 0.12), y + h * (c + 0.09), 2); ctx.fill(); }
+      ctx.fillStyle = C('#5f412d', gg); ctx.fillRect(x + w * (a + 0.085), y + h * c, 2, h * 0.24);
+    });
+    // door
+    ctx.fillStyle = C('#5f412d', gg); rr(x + w * 0.4, y + h * 0.6, w * 0.2, h * 0.4, 8); ctx.fill();
+    ctx.fillStyle = C(lit ? '#a7794f' : '#8a6a4a', gg); rr(x + w * 0.42, y + h * 0.63, w * 0.16, h * 0.37, 6); ctx.fill();
+    if (b.vines && !lit) { ctx.strokeStyle = '#4a6a42'; ctx.lineWidth = 3; for (let i = 0; i < 9; i++) { ctx.beginPath(); const sx0 = x + w * (0.3 + i * 0.05); ctx.moveTo(sx0, y + h); ctx.bezierCurveTo(sx0 + 10, y + h * 0.8, sx0 - 12, y + h * 0.6, sx0 + 4, y + h * 0.35); ctx.stroke(); }
+      ctx.fillStyle = '#5c7f52'; for (let i = 0; i < 26; i++) { ctx.beginPath(); ctx.ellipse(x + w * (0.3 + hash(i, 1) * 0.45), y + h * (0.4 + hash(i, 2) * 0.6), 4, 2.5, hash(i, 3) * 3, 0, 7); ctx.fill(); } }
+    // sign
+    if (b.sign) { ctx.fillStyle = C('#e8d6a8', gg); rr(x + w * 0.62, y + h * 0.3, w * 0.16, h * 0.18, 4); ctx.fill(); ctx.strokeStyle = C('#7a543b', gg); ctx.lineWidth = 2; ctx.stroke();
+      ctx.save(); if (!lit) ctx.filter = 'grayscale(1)'; ctx.font = `${Math.round(TS * 0.32)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.sign, x + w * 0.7, y + h * 0.4); ctx.restore(); }
+    if (b.wheel) { ctx.strokeStyle = C('#6a4a32', gg); ctx.lineWidth = 4; circ(x + w * 0.02, y + h * 0.75, h * 0.3); ctx.stroke(); for (let i = 0; i < 6; i++) { const a = i * 1.047 + (lit ? t : 0); ctx.beginPath(); ctx.moveTo(x + w * 0.02, y + h * 0.75); ctx.lineTo(x + w * 0.02 + Math.cos(a) * h * 0.3, y + h * 0.75 + Math.sin(a) * h * 0.3); ctx.stroke(); } }
+    // the hex: drifting purple wisps
+    if (!lit) for (let i = 0; i < 4; i++) { const k = (t * 0.25 + i / 4) % 1; ctx.fillStyle = `rgba(150,110,210,${0.35 * Math.sin(k * Math.PI)})`; circ(x + w * (0.15 + i * 0.22) + Math.sin(t + i) * 6, y + h * (0.9 - k * 1.1), TS * 0.16); ctx.fill(); }
+  },
+  appletree(o, x, y, w, h, g, t) {
+    drawSprite('oak', 1, g, x + w / 2, y + h * 0.95, Math.sin(t * 0.8) * 0.02);
+    if (G.flag('weedsCut')) { const n = 3; for (let i = 0; i < 6; i++) { ctx.fillStyle = C('#e2403f', g); circ(x + w * (0.1 + hash(i, 7) * 0.8), y - h * (0.6 + hash(i, 8) * 1.1), TS * 0.07); ctx.fill(); } }
+    else { ctx.strokeStyle = C('#6a7a42', g); ctx.lineWidth = 2.5; for (let i = 0; i < 10; i++) { const sx0 = x + w * (0.1 + hash(i, 4) * 0.8); ctx.beginPath(); ctx.moveTo(sx0, y + h); ctx.bezierCurveTo(sx0 + 8, y + h * 0.3, sx0 - 10, y - h * 0.4, sx0 + 4, y - h * (0.6 + hash(i, 5) * 0.8)); ctx.stroke(); }
+      ctx.fillStyle = C('#7a8a4a', g); for (let i = 0; i < 18; i++) { ctx.beginPath(); ctx.ellipse(x + w * hash(i, 6), y + h * (0.9 - hash(i, 9) * 2), 4, 2.5, i, 0, 7); ctx.fill(); } }
+  },
+  ironrock(o, x, y, w, h, g) {
+    const rg2 = ctx.createRadialGradient(x + w * 0.38, y + h * 0.38, 2, x + w * 0.5, y + h * 0.6, w * 0.5);
+    rg2.addColorStop(0, C('#c98a6a', g)); rg2.addColorStop(0.6, C('#9a5a42', g)); rg2.addColorStop(1, C('#6a3a2a', g));
+    ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.88, w * 0.42, h * 0.1, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = rg2; rr(x + w * 0.1, y + h * 0.2, w * 0.8, h * 0.7, w * 0.28); ctx.fill();
+    ctx.strokeStyle = C('#d8a080', g, 0.8); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + w * 0.25, y + h * 0.45); ctx.lineTo(x + w * 0.5, y + h * 0.55); ctx.lineTo(x + w * 0.7, y + h * 0.4); ctx.stroke();
+  },
+  signpost(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#7a543b', g); ctx.fillRect(x + w * 0.46, y - h * 0.3, w * 0.08, h * 1.2);
+    ctx.fillStyle = C('#b5835d', g); ctx.beginPath(); ctx.moveTo(x - w * 0.05, y - h * 0.15); ctx.lineTo(x + w * 0.8, y - h * 0.15); ctx.lineTo(x + w * 0.8, y + h * 0.15); ctx.lineTo(x - w * 0.05, y + h * 0.15); ctx.lineTo(x - w * 0.2, y); ctx.closePath(); ctx.fill();
+  },
+  fallen(o, x, y, w, h, g) {
+    for (let i = 0; i < 3; i++) { const yy = y + h * (0.2 + i * 0.28), a = (i - 1) * 0.15;
+      ctx.save(); ctx.translate(x + w / 2, yy); ctx.rotate(a);
+      const lg = ctx.createLinearGradient(0, -h * 0.12, 0, h * 0.12); lg.addColorStop(0, C('#9a6c42', g)); lg.addColorStop(1, C('#4e3220', g));
+      ctx.fillStyle = lg; rr(-w * 0.55, -h * 0.12, w * 1.1, h * 0.24, h * 0.1); ctx.fill();
+      ctx.fillStyle = C('#d8b88a', g); ctx.beginPath(); ctx.ellipse(w * 0.55, 0, h * 0.06, h * 0.12, 0, 0, 7); ctx.fill(); ctx.restore(); }
+  },
+  brokenbridge(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#a7794f', g); ctx.fillRect(x, y + h * 0.15, w * 0.32, h * 0.7); ctx.fillRect(x + w * 0.7, y + h * 0.15, w * 0.3, h * 0.7);
+    ctx.strokeStyle = C('#7a5432', g); ctx.lineWidth = 2;
+    for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + i * w * 0.08, y + h * 0.15); ctx.lineTo(x + i * w * 0.08, y + h * 0.85); ctx.stroke(); }
+    ctx.save(); ctx.translate(x + w * 0.45, y + h * 0.6); ctx.rotate(0.5); ctx.fillStyle = C('#8a6a4a', g); ctx.fillRect(-w * 0.12, -4, w * 0.24, 8); ctx.restore();
+  },
+  chest(o, x, y, w, h, g) {
+    const open = G.flag('chestOpen');
+    ctx.fillStyle = C('#7a543b', g); rr(x + w * 0.12, y + h * 0.35, w * 0.76, h * 0.5, 4); ctx.fill();
+    ctx.fillStyle = C('#9a6c42', g); rr(x + w * 0.12, open ? y + h * 0.05 : y + h * 0.22, w * 0.76, h * 0.22, 6); ctx.fill();
+    ctx.fillStyle = C('#e7c36a', g); ctx.fillRect(x + w * 0.45, y + h * 0.4, w * 0.1, h * 0.14);
+    if (!open && Math.sin(Date.now() / 300) > 0.5) star(x + w * 0.8, y + h * 0.25, TS * 0.08, 'rgba(255,255,230,0.9)');
+  },
   well(o, x, y, w, h, g) {
     ctx.fillStyle = C('#a9a39b', g); circ(x + w / 2, y + h * 0.55, w * 0.42); ctx.fill();
     ctx.fillStyle = C('#3c5a78', g); circ(x + w / 2, y + h * 0.55, w * 0.27); ctx.fill();
@@ -1578,6 +1804,36 @@ function drawCreature(c, t) {
     ctx.fillStyle = '#f7b3c4'; circ(s * 0.22, -s * 0.05 - hop, s * 0.02); ctx.fill();
     ctx.fillStyle = '#333'; circ(s * 0.16, -s * 0.08 - hop, s * 0.018); ctx.fill();
     ctx.fillStyle = '#ffffff'; circ(-s * 0.19, s * 0.04 - hop, s * 0.05); ctx.fill();
+  } else if (sp === 'bird') {
+    const flap = Math.abs(Math.sin(c.t * 9 + c.x)), col = c.def.color || '#5b8fe0';
+    ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(0, 0, s * 0.13, s * 0.1, 0, 0, 7); ctx.fill();
+    circ(s * 0.11, -s * 0.06, s * 0.07); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.ellipse(-s * 0.02, -s * 0.03 - flap * s * 0.08, s * 0.1, s * 0.04 + flap * s * 0.03, -0.4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f0b040'; ctx.beginPath(); ctx.moveTo(s * 0.17, -s * 0.07); ctx.lineTo(s * 0.24, -s * 0.05); ctx.lineTo(s * 0.17, -s * 0.03); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.13, -s * 0.08, s * 0.015); ctx.fill();
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(-s * 0.12, 0); ctx.lineTo(-s * 0.22, -s * 0.04); ctx.lineTo(-s * 0.2, s * 0.04); ctx.fill();
+  } else if (sp === 'mouse') {
+    const hop = Math.abs(Math.sin(c.t * 8)) * s * 0.02;
+    ctx.strokeStyle = '#c99a9a'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-s * 0.1, s * 0.05); ctx.quadraticCurveTo(-s * 0.25, s * 0.0, -s * 0.22, -s * 0.12); ctx.stroke();
+    ctx.fillStyle = '#b8b0a8'; ctx.beginPath(); ctx.ellipse(0, s * 0.05 - hop, s * 0.11, s * 0.08, 0, 0, 7); ctx.fill();
+    circ(s * 0.09, 0 - hop, s * 0.06); ctx.fill();
+    ctx.fillStyle = '#f0c8c8'; circ(s * 0.06, -s * 0.06 - hop, s * 0.04); ctx.fill(); circ(s * 0.12, -s * 0.07 - hop, s * 0.035); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.12, -s * 0.01 - hop, s * 0.012); ctx.fill();
+  } else if (sp === 'squirrel') {
+    const hop = Math.abs(Math.sin(c.t * 6)) * s * 0.04;
+    ctx.fillStyle = '#b8653a'; ctx.beginPath(); ctx.ellipse(-s * 0.14, -s * 0.1 - hop, s * 0.1, s * 0.2, -0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c9773f'; ctx.beginPath(); ctx.ellipse(0, s * 0.05 - hop, s * 0.13, s * 0.11, 0, 0, 7); ctx.fill();
+    circ(s * 0.1, -s * 0.06 - hop, s * 0.08); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(s * 0.07, -s * 0.12 - hop); ctx.lineTo(s * 0.09, -s * 0.2 - hop); ctx.lineTo(s * 0.12, -s * 0.13 - hop); ctx.fill();
+    ctx.fillStyle = '#f3e2c8'; ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.08 - hop, s * 0.06, s * 0.05, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.13, -s * 0.07 - hop, s * 0.016); ctx.fill();
+  } else if (sp === 'badger') {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.25, s * 0.06, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#7a7a80'; ctx.beginPath(); ctx.ellipse(0, s * 0.06, s * 0.24, s * 0.15, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8a5a3a'; rr(-s * 0.12, -s * 0.02, s * 0.2, s * 0.2, 4); ctx.fill();
+    ctx.fillStyle = '#f2f0ea'; ctx.beginPath(); ctx.ellipse(s * 0.2, -s * 0.04, s * 0.11, s * 0.09, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2a2a2e'; ctx.beginPath(); ctx.ellipse(s * 0.2, -s * 0.07, s * 0.035, s * 0.08, 0.1, 0, 7); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.3, -s * 0.03, s * 0.02); ctx.fill();
   } else { // chipmunk
     const hop = Math.abs(Math.sin(c.t * 7)) * s * 0.04;
     ctx.fillStyle = 'rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.ellipse(0, s * 0.2, s * 0.17, s * 0.05, 0, 0, 7); ctx.fill();

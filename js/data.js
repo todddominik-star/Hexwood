@@ -2,7 +2,8 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v3';
+const VERSION = 'v4';
+const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
 const ITEMS = {
@@ -25,6 +26,15 @@ const ITEMS = {
   strawberry: { name: 'Wild Strawberry',  icon: '🍓', kind: 'trinket',  desc: 'Tiny, sweet, and very red.' },
   stool:      { name: 'Step Stool',    icon: '🪑', kind: 'tool',       desc: 'For reaching high places.' },
   key:        { name: 'Door Key',      icon: '🗝️', kind: 'tool',       desc: 'An old iron key.' },
+  bark:       { name: 'Dry Bark',      icon: '🪵', kind: 'ingredient', desc: 'Papery bark peeled from a dead tree.' },
+  ironstone:  { name: 'Iron-stone',    icon: '🪨', kind: 'ingredient', desc: 'A heavy, rust-streaked stone. The smith can use it.' },
+  apple:      { name: 'Apple',         icon: '🍎', kind: 'trinket',    desc: 'Crisp and sweet.' },
+  tinder:     { name: 'Bark Tinder',   icon: '🟫', kind: 'worked',     desc: 'Dry bark ground fine. It catches at the smallest spark.' },
+  embercube:  { name: 'Ember Cube',    icon: '🟧', kind: 'worked',     desc: 'Ash and tinder pressed into a warm little cube. Waiting to be enchanted.' },
+  berrytart:  { name: 'Berry Tart',    icon: '🥧', kind: 'trinket',    desc: 'Rosie\'s berry tart. Everyone loves these.' },
+  turnover:   { name: 'Apple Turnover', icon: '🥐', kind: 'trinket',   desc: 'Flaky, warm, and full of apple.' },
+  machete:    { name: 'Machete',       icon: '🔪', kind: 'tool',       desc: 'Bruno\'s blade for vines, weeds and thickets.' },
+  boots:      { name: 'Sturdy Boots',  icon: '🥾', kind: 'gear',       desc: 'Old walking boots. You move a little faster in them.' },
   moonpebble: { name: 'Moon Pebble',   icon: '🌙', kind: 'curio',      desc: 'A pale pebble that glows at night.' },
   goldacorn:  { name: 'Golden Acorn',  icon: '🌰', kind: 'curio',      desc: 'An acorn of real gold. The chipmunks\' treasure.' },
   tinybell:   { name: 'Tiny Bell',     icon: '🔔', kind: 'curio',      desc: 'It rings without being shaken.' },
@@ -36,6 +46,7 @@ const SPELL_ITEMS = {
   writepowder: { name: 'Write Powder', icon: '✒️', shape: 'powder', page: 'write' },
   lightorb:    { name: 'Light Orb',    icon: '🌕', shape: 'orb', page: 'light',  charges: 3 },
   seekerorb:   { name: 'Seeker Orb',   icon: '🔮', shape: 'orb', page: 'seeker', charges: 3 },
+  kindlecube:  { name: 'Kindle Cube',  icon: '🔥', shape: 'cube', page: 'kindle' },
 };
 
 const SHAPES = {
@@ -45,7 +56,7 @@ const SHAPES = {
 };
 
 // ---------------------------------------------------------------- spellbook pages
-const PAGE_ORDER = ['write', 'light', 'seeker'];
+const PAGE_ORDER = ['write', 'light', 'seeker', 'kindle'];
 const PAGES = {
   write: {
     unknown: 'A spell for writing magic',
@@ -94,6 +105,21 @@ const PAGES = {
   },
 };
 
+PAGES.kindle = {
+  unknown: 'A warm, square spell that never cools',
+  name: 'Kindle', shape: 'cube',
+  formula: [
+    '1 Hearth Ash',
+    '1 Bark Tinder (grind Dry Bark at the mortar; dead trees have bark)',
+    'Join them at the workbench into an Ember Cube.',
+    'Ask the fairy to enchant it.',
+    'Cast it standing beside something that should always burn.',
+  ],
+  effects: [
+    'Lights a fire that never goes out, for good.',
+    'Each cube is used up when cast. Make one for every fire you want.',
+  ],
+};
 // Effects discovered later, added to the book automatically.
 const LATE_EFFECTS = {
   lantern: { page: 'light', text: 'Kindles old lanterns when you stand close while it glows.' },
@@ -115,9 +141,18 @@ const RECIPES = [
     verb: 'Join' },
   { id: 'seeker', station: 'fairy',  page: 'seeker', needs: { clearorb: 1 }, spell: 'seekerorb',
     verb: 'Enchant' },
+  { id: 'tinder', station: 'mortar', page: 'kindle', needs: { bark: 1 }, makes: 'tinder', verb: 'Grind' },
+  { id: 'ember',  station: 'bench',  page: 'kindle', needs: { ash: 1, tinder: 1 }, makes: 'embercube', verb: 'Join' },
+  { id: 'kindle', station: 'fairy',  page: 'kindle', needs: { embercube: 1 }, spell: 'kindlecube', verb: 'Enchant' },
+  // village barter
+  { id: 'tart',     station: 'bakery', req: () => G.flag('bakeryLit'), needs: { inkberry: 2, strawberry: 2 }, makes: 'berrytart', verb: 'Trade' },
+  { id: 'turnover', station: 'bakery', req: () => G.flag('bakeryLit'), needs: { apple: 2 }, makes: 'turnover', verb: 'Trade' },
+  { id: 'machete',  station: 'smithy', req: () => G.flag('smithyLit') && !G.flag('macheteGot'), needs: { ironstone: 2, bark: 1, berrytart: 1 }, makes: 'machete', verb: 'Trade' },
+  { id: 'band',     station: 'smithy', req: () => G.flag('macheteGot') && G.unbandedOrbs().length > 0, needs: { ironstone: 2, berrytart: 1 }, special: 'band', verb: 'Trade',
+    label: 'Silver orb band (an orb holds 6 charges)', icon: '💍' },
 ];
 
-const STATION_NAMES = { mortar: 'Mortar & Pestle', bench: 'Workbench', fairy: 'Fennel the Fairy' };
+const STATION_NAMES = { mortar: 'Mortar & Pestle', bench: 'Workbench', fairy: 'Fennel the Fairy', bakery: 'Rosie\'s Bakery', smithy: 'Bruno\'s Smithy' };
 
 // ---------------------------------------------------------------- maps
 // Tile legend:
@@ -227,6 +262,73 @@ function buildOutdoor() {
   // world border
   rect(0, 0, W - 1, 0, 'T'); rect(0, H - 1, W - 1, H - 1, 'T');
   rect(0, 0, 0, H - 1, 'T'); rect(W - 1, 0, W - 1, H - 1, 'T');
+  // the path west toward town
+  rect(0, 17, 7, 17, '='); set(0, 16, 'T'); set(0, 18, 'T');
+  return g.map(r => r.join(''));
+}
+
+// The Old Road: a grassy stretch with a few trees between the hut and town.
+function buildRoad() {
+  const W = 30, H = 20, g = [];
+  for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
+  const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) g[y][x] = c; };
+  const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, c); };
+  const R = rng(21);
+  rect(0, 0, W - 1, 0, 'T'); rect(0, 0, 0, H - 1, 'T'); rect(W - 1, 0, W - 1, H - 1, 'T');
+  rect(0, 15, W - 1, 16, '~'); rect(0, H - 1, W - 1, H - 1, 'T');
+  for (let x = 1; x < W - 1; x++) { if (R() < 0.18) set(x, 18, 'T'); else if (R() < 0.3) set(x, 17, ':'); }
+  rect(0, 8, W - 1, 8, '='); rect(13, 7, 17, 7, '='); rect(13, 8, 17, 8, ',');
+  set(12, 8, '='); set(18, 8, '=');
+  const keep = new Set();
+  const k = (x, y, r = 1) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) keep.add((x + dx) + ',' + (y + dy)); };
+  [[11, 3], [16, 11], [17, 11], [8, 10], [20, 5], [13, 14], [5, 4], [9, 11], [14, 3], [22, 12], [25, 4], [24, 10]].forEach(([x, y]) => k(x, y));
+  for (let x = 0; x < W; x++) { keep.add(x + ',8'); keep.add(x + ',7'); keep.add(x + ',9'); }
+  for (let y = 1; y < 15; y++) for (let x = 1; x < W - 1; x++) {
+    if (g[y][x] !== ',' || keep.has(x + ',' + y)) continue;
+    const r = R();
+    if (r < 0.07) set(x, y, 'T'); else if (r < 0.1) set(x, y, 'b'); else if (r < 0.2) set(x, y, ':');
+  }
+  [[5, 4], [9, 11], [14, 3], [22, 12], [25, 4]].forEach(([x, y]) => set(x, y, 'K'));   // dead trees: dry bark
+  [[15, 11], [18, 11], [16, 12], [17, 12]].forEach(([x, y]) => set(x, y, 'R'));        // rocky outcrop
+  [[6, 13], [7, 13], [23, 10], [24, 11]].forEach(([x, y]) => set(x, y, 't'));            // thickets
+  set(0, 8, '='); set(W - 1, 8, '=');
+  return g.map(r => r.join(''));
+}
+
+// Thistledown, following Todd's sketch: river down the west side bending east below town,
+// one main street, two cross streets, three rows of four buildings.
+function buildVillage() {
+  const W = 34, H = 28, g = [];
+  for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
+  const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) g[y][x] = c; };
+  const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, c); };
+  const R = rng(33);
+  rect(0, 0, W - 1, 0, 'T'); rect(0, H - 1, W - 1, H - 1, 'T'); rect(0, 0, 0, H - 1, 'T'); rect(W - 1, 0, W - 1, H - 1, 'T');
+  rect(5, 1, 6, 21, '~'); rect(5, 22, W - 1, 23, '~');
+  rect(19, 1, 20, 21, '=');                 // main street
+  rect(19, 22, 20, 23, 'n');                // south bridge into town
+  rect(19, 24, 20, 25, '='); rect(19, 25, W - 1, 25, '=');   // road toward the hut
+  rect(1, 6, W - 2, 6, '='); rect(5, 6, 6, 6, 'n');          // north cross street, bridge west
+  rect(1, 13, W - 2, 13, '=');                                // middle cross street
+  rect(5, 13, 6, 13, '~');                                    // its bridge is broken
+  // little paths to each door
+  [9, 14, 23, 28].forEach(x => { rect(x + 1, 5, x + 2, 5, '='); rect(x + 1, 12, x + 2, 12, '='); });
+  // brambles around the old chest beside the library
+  [[7, 1], [8, 1], [8, 2], [7, 3], [8, 3]].forEach(([x, y]) => set(x, y, 't'));
+  // greenery
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (g[y][x] !== ',') continue;
+    if (y >= 24 && y <= 26 && x >= 17) continue;
+    const inBuilding = [2, 9, 16].some(by => y >= by - 1 && y <= by + 3) && [9, 14, 23, 28].some(bx => x >= bx - 1 && x <= bx + 4);
+    const r = R();
+    if (inBuilding) { if (r < 0.1 && (y === 5 || y === 12 || y === 19)) set(x, y, ':'); continue; }
+    if (y >= 24) { if (r < 0.35) set(x, y, 'T'); else if (r < 0.45) set(x, y, ':'); continue; }
+    if (x <= 4) { if (r < 0.25) set(x, y, 'T'); else if (r < 0.32) set(x, y, ':'); continue; }
+    if (r < 0.12) set(x, y, ':');
+  }
+  rect(1, 6, 4, 6, '='); rect(1, 13, 4, 13, '=');
+  [[7, 9], [8, 16], [32, 3], [32, 10], [32, 18], [21, 20], [13, 20]].forEach(([x, y]) => set(x, y, 'T'));
+  set(W - 1, 25, '=');
   return g.map(r => r.join(''));
 }
 
@@ -241,6 +343,14 @@ const ZONES = {
     { id: 'yard',   name: 'Hut Yard',          rect: [0, 11, 15, 22] },
     { id: 'meadow', name: 'Sunny Meadow',      rect: [16, 11, 39, 22] },
     { id: 'brook',  name: 'Willow Brook',      rect: [0, 23, 39, 31] },
+  ],
+  road: [{ id: 'road', name: 'The Old Road', rect: [0, 0, 29, 19] }],
+  village: [
+    { id: 'v_bakery', name: 'The Bakery',      rect: [8, 8, 13, 12] },
+    { id: 'v_home1',  name: 'Bramble Cottage', rect: [14, 8, 18, 12] },
+    { id: 'v_smithy', name: 'The Smithy',      rect: [8, 15, 13, 21] },
+    { id: 'v_home2',  name: 'Lantern Cottage', rect: [14, 15, 18, 21] },
+    { id: 'village',  name: VILLAGE_NAME,      rect: [0, 0, 33, 27] },
   ],
 };
 
@@ -368,6 +478,59 @@ const OBJECTS = [
     act: () => ({ label: 'Look in the well', fn: () => G.say(['A deep, cool well. Your reflection looks back, the only color around.']) }) },
   { id: 'bell', map: 'out', tx: 37, ty: 12, solid: false, draw: 'pickup', icon: '🔔', vis: () => F('bunnyLed') && !F('bellTaken'),
     act: () => ({ label: 'Pick up the bell', fn: () => { G.give('tinybell'); G.setFlag('bellTaken'); G.curio('tinybell'); } }) },
+  // ---------- the Old Road
+  { id: 'appletree', map: 'road', tx: 11, ty: 3, draw: 'appletree',
+    act: () => {
+      if (!F('weedsCut')) return G.has('machete') ? { label: 'Cut away the weeds', fn: () => { G.setFlag('weedsCut'); G.chime(2); G.burstAt(11.5, 3.5, '#c8f0a0'); G.say(['You hack away the choking bindweed. The old apple tree seems to stand up straighter.', 'Apples are already ripening on its branches.']); } }
+        : { label: 'Look at the apple tree', fn: () => G.say(['An old apple tree, choked with tangled bindweed. Not a single apple.', 'If only you had a blade to cut it free.']) };
+      return G.count('apple') < 3 ? { label: 'Pick an apple', fn: () => G.give('apple') } : { label: 'Look', fn: () => G.say(['There are always a few apples ripening here.']) };
+    } },
+  { id: 'iron1', map: 'road', tx: 16, ty: 11, draw: 'ironrock',
+    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+  { id: 'iron2', map: 'road', tx: 17, ty: 11, draw: 'ironrock',
+    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+  { id: 'roadsign', map: 'road', tx: 3, ty: 7, draw: 'signpost',
+    act: () => ({ label: 'Read the signpost', fn: () => G.say([`The old signpost points west: "${VILLAGE_NAME}". The other arm, pointing back east, just says "Moss".`]) }) },
+
+  // ---------- Thistledown
+  { id: 'library',  map: 'village', tx: 9,  ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Owl\'s Library', wall: '#d9cbb0', roof: '#5b6aa8', sign: '📚' },
+    act: () => ({ label: 'Look at the library', fn: () => G.say(['The Owl\'s Library. A great hex holds its doors shut. Through the gray glass you can see shelves and shelves of books.', 'Your magic isn\'t strong enough for this one... yet.']) }) },
+  { id: 'paper',    map: 'village', tx: 14, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Paper Mill', wall: '#e3d6bd', roof: '#7a8a5a', sign: '📜' },
+    act: () => ({ label: 'Look at the workshop', fn: () => G.say(['A little workshop full of drying racks, the kind used for making paper. Hexed and silent.']) }) },
+  { id: 'clothier', map: 'village', tx: 23, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Clothier', wall: '#ecd9d9', roof: '#a85b7a', sign: '🧵' },
+    act: () => ({ label: 'Look at the clothier', fn: () => G.say(['The Clothier. Bolts of fabric sit gray behind the window. A heavy hex holds the door.']) }) },
+  { id: 'home3',    map: 'village', tx: 28, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'A cottage', wall: '#e2d4b6', roof: '#8a6a4a' },
+    act: () => ({ label: 'Look at the cottage', fn: () => G.say(['A small cottage, wrapped in a heavy gray hex.']) }) },
+  { id: 'bakery',   map: 'village', tx: 9,  ty: 9,  tw: 4, th: 3, draw: 'building', kindle: 'bakeryLit', b: { name: 'The Bakery', wall: '#f1dfc0', roof: '#c4704a', sign: '🍞', oven: true },
+    act: () => G.flag('bakeryLit') ? { label: 'Visit the bakery', fn: () => G.visitShop('bakery') }
+      : { label: 'Look at the bakery', fn: () => G.say(['The Bakery. Through the window you can see a big brick oven, stone cold.', 'A bakery with no fire... if only something could make that oven burn again, for good.']) } },
+  { id: 'home1',    map: 'village', tx: 14, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Bramble Cottage', wall: '#e8dcc0', roof: '#6a8a5a', vines: true },
+    act: () => F('home1Open') ? { label: 'Look at Bramble Cottage', fn: () => G.say(['Bramble Cottage. The squirrel family has made it cozy already.']) }
+      : G.has('machete') ? { label: 'Cut away the vines', fn: () => G.openHome1() }
+      : { label: 'Look at the cottage', fn: () => G.say(['A pretty cottage, its door completely buried in thick, hexed vines.', 'You\'d need a sharp blade to cut through.']) } },
+  { id: 'leather',  map: 'village', tx: 23, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Leather Goods', wall: '#dccab0', roof: '#7a5a3a', sign: '👜' },
+    act: () => ({ label: 'Look at the shop', fn: () => G.say(['Leather Goods. Pouches and belts hang gray in the window. Hexed shut.']) }) },
+  { id: 'crafts',   map: 'village', tx: 28, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Crafting Supplies', wall: '#e6dcc8', roof: '#4a7a8a', sign: '✂️' },
+    act: () => ({ label: 'Look at the shop', fn: () => G.say(['Crafting Supplies. Jars of buttons, spools and beads, all gone gray. Hexed shut.']) }) },
+  { id: 'smithy',   map: 'village', tx: 9,  ty: 16, tw: 4, th: 3, draw: 'building', kindle: 'smithyLit', b: { name: 'The Smithy', wall: '#b8b2a8', roof: '#5a5a66', sign: '⚒️', forge: true, stone: true },
+    act: () => G.flag('smithyLit') ? { label: 'Visit the smithy', fn: () => G.visitShop('smithy') }
+      : { label: 'Look at the smithy', fn: () => G.say(['The Smithy. The forge inside is cold and dark, and the anvil is gray with dust.', 'No smith would come to a forge without fire.']) } },
+  { id: 'home2',    map: 'village', tx: 14, ty: 16, tw: 4, th: 3, draw: 'building', b: { name: 'Lantern Cottage', wall: '#ece0c4', roof: '#9a6a8a', dark: true },
+    act: () => F('home2Open') ? { label: 'Look at Lantern Cottage', fn: () => G.say(['Lantern Cottage. Six chipmunks peek out of every window.']) }
+      : G.lightActive() ? { label: 'Shine your light in the window', fn: () => G.openHome2() }
+      : { label: 'Look at the cottage', fn: () => G.say(['A cottage whose windows are so dark they seem to swallow light. Something hexed is sitting inside them.', 'Maybe some light would chase it out.']) } },
+  { id: 'mill',     map: 'village', tx: 23, ty: 16, tw: 4, th: 3, draw: 'building', b: { name: 'The Mill', wall: '#e0d0b0', roof: '#8a5a3a', sign: '🌾', wheel: true },
+    act: () => ({ label: 'Look at the mill', fn: () => G.say(['The Mill. Its big wheel is stuck fast. Hexed and silent.']) }) },
+  { id: 'home4',    map: 'village', tx: 28, ty: 16, tw: 4, th: 3, draw: 'building', b: { name: 'A cottage', wall: '#e4d8c0', roof: '#6a7a9a' },
+    act: () => ({ label: 'Look at the cottage', fn: () => G.say(['A small cottage, wrapped in a heavy gray hex.']) }) },
+  { id: 'fallen',   map: 'village', tx: 1, ty: 5, tw: 4, th: 3, draw: 'fallen',
+    act: () => ({ label: 'Look at the fallen trees', fn: () => G.say(['Great old trees have fallen across the road west. Far too big to move.', '(The road beyond will open in a later version.)']) }) },
+  { id: 'brokenbridge', map: 'village', tx: 5, ty: 13, tw: 2, solid: false, layer: 'floor', draw: 'brokenbridge',
+    act: () => ({ label: 'Look at the bridge', fn: () => G.say(['A wooden bridge, broken clean through the middle. The river rushes past below.', '(Repairing it will come in a later version.)']) }) },
+  { id: 'chest', map: 'village', tx: 7, ty: 2, draw: 'chest', vis: () => F('chainBird'),
+    act: () => F('chestOpen') ? { label: 'Look', fn: () => G.say(['An empty old chest.']) }
+      : { label: 'Open the old chest', fn: () => G.openChest() } },
+
   // secrets (need the Seeker Orb)
   { id: 'moonpebble', map: 'out', tx: 28, ty: 5, solid: false, draw: 'pickup', icon: '🌙', secret: true, vis: () => !F('pebbleTaken'),
     act: () => ({ label: 'Pick up the pebble', fn: () => { G.give('moonpebble'); G.setFlag('pebbleTaken'); G.curio('moonpebble'); G.setZone('stones', 0); } }) },
@@ -395,11 +558,30 @@ const CREATURES = [
   { id: 'g_chip',  map: 'out', x: 9.5,  y: 8.5, species: 'chipmunk', zone: 'grove' },
   { id: 's_chip',  map: 'out', x: 35.5, y: 3.5, species: 'chipmunk', zone: 'stones' },
   { id: 's_fire',  map: 'out', x: 21.5, y: 4.5, species: 'firefly', zone: 'stones' },
+  { id: 'r_fly1',  map: 'road', x: 8.5,  y: 10.5, species: 'butterfly', zone: 'road' },
+  { id: 'r_fly2',  map: 'road', x: 20.5, y: 5.5,  species: 'butterfly', zone: 'road' },
+  { id: 'r_frog',  map: 'road', x: 13.5, y: 14.3, species: 'frog', zone: 'road', reward: { item: 'strawberry', n: 1, text: 'It hops off and leaves you a wild strawberry.' } },
+  { id: 'v_blue',  map: 'village', x: 25.5, y: 7.6,  species: 'bird', color: '#5b8fe0', zone: 'village' },
+  { id: 'v_red',   map: 'village', x: 13.5, y: 14.6, species: 'bird', color: '#e0574f', zone: 'village' },
+  { id: 'v_yellow',map: 'village', x: 30.5, y: 20.3, species: 'bird', color: '#f0c43a', zone: 'village' },
+  { id: 'v_mouse1',map: 'village', x: 22.3, y: 12.4, species: 'mouse', zone: 'village' },
+  { id: 'v_mouse2',map: 'village', x: 16.5, y: 20.2, species: 'mouse', zone: 'village' },
+];
+// Residents who move into restored buildings (never hexed).
+const RESIDENTS = [
+  { id: 'rosie',  map: 'village', x: 11, y: 12.6, species: 'bunny', when: () => G.flag('bakeryLit') },
+  { id: 'rosie2', map: 'village', x: 12.4, y: 12.9, species: 'bunny', when: () => G.flag('bakeryLit') },
+  { id: 'bruno',  map: 'village', x: 11, y: 19.8, species: 'badger', when: () => G.flag('smithyLit') },
+  { id: 'sq1',    map: 'village', x: 15.6, y: 12.6, species: 'squirrel', when: () => G.flag('home1Open') },
+  { id: 'sq2',    map: 'village', x: 17,   y: 12.9, species: 'squirrel', when: () => G.flag('home1Open') },
+  ...[0, 1, 2, 3, 4, 5].map(i => ({ id: 'ch' + i, map: 'village', x: 14.6 + (i % 3) * 1.1, y: 19.6 + Math.floor(i / 3) * 0.9, species: 'chipmunk', when: () => G.flag('home2Open') })),
+  ...[['#5b8fe0', 7.8], ['#e0574f', 8.6], ['#f0c43a', 7.2]].map(([c, x], i) => ({ id: 'bird' + i, map: 'village', x, y: 5.3 + i * 0.15, species: 'bird', color: c, when: () => G.flag('chainBird') })),
 ];
 
 // Zone challenges for zones that clear by freeing every hexed creature in them.
-const FREE_ALL_ZONES = ['yard', 'meadow', 'brook'];
+const FREE_ALL_ZONES = ['yard', 'meadow', 'brook', 'road', 'village'];
 
 const CLUES = {
+  birds: 'Three voices, one song. Beside the owl\'s silent door, the brambles hide what an old friend left behind. A sharp blade and a gentle hand.',
   chipmunks: 'Six small friends remember the way. Where three birches lean together in the dark grove, the hedge is only pretending. Look with a seeing eye.',
 };

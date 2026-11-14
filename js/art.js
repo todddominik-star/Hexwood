@@ -41,6 +41,7 @@ const SPRITE_DEF = {
   flower: { w: 110, h: 100, ax: 55, ay: 88, k: () => 1.12 * TS / 100, paint: (B, R) => paintBush(B, R, 'flower') },
   berry:  { w: 110, h: 100, ax: 55, ay: 88, k: () => 1.12 * TS / 100, paint: (B, R) => paintBush(B, R, 'berry') },
   fern:   { w: 110, h: 100, ax: 55, ay: 88, k: () => 1.12 * TS / 100, paint: (B, R) => paintBush(B, R, 'fern') },
+  bramble: { w: 110, h: 110, ax: 55, ay: 100, k: () => 1.08 * TS / 100, paint: (B, R) => paintBramble(B, R) },
   hedge:  { w: 100, h: 140, ax: 0, ay: 130, k: () => TS / 100, paint: (B, R, v) => paintHedge(B, R, v) },
 };
 function makeSprite(kind, variant) {
@@ -181,6 +182,18 @@ function paintBush(B, R, kind) {
     for (let p = 0; p < 5; p++) { B.fillStyle = c; B.beginPath(); B.arc(x + Math.cos(p * 1.26) * 3.5, y + Math.sin(p * 1.26) * 3.5, 3, 0, 7); B.fill(); }
     B.fillStyle = '#e8a63a'; B.beginPath(); B.arc(x, y, 2, 0, 7); B.fill();
   }
+}
+function paintBramble(B, R) {
+  pShadow(B, 55, 98, 46, 9);
+  for (let i = 0; i < 26; i++) {
+    const x0 = 15 + R() * 80, y0 = 98, cx = 10 + R() * 90, cy = 20 + R() * 60, x1 = 5 + R() * 100, y1 = 30 + R() * 60;
+    B.strokeStyle = ['#3a2a22', '#5a3a2a', '#4a5a32'][i % 3]; B.lineWidth = 2 + R() * 1.5;
+    B.beginPath(); B.moveTo(x0, y0); B.quadraticCurveTo(cx, cy, x1, y1); B.stroke();
+    for (let k = 0; k < 3; k++) { const t = 0.3 + k * 0.25, px = (1 - t) * (1 - t) * x0 + 2 * (1 - t) * t * cx + t * t * x1, py = (1 - t) * (1 - t) * y0 + 2 * (1 - t) * t * cy + t * t * y1;
+      B.fillStyle = '#2a1e18'; B.beginPath(); B.moveTo(px, py); B.lineTo(px + 4, py - 3); B.lineTo(px + 1, py + 1); B.fill(); }
+  }
+  pLeaves(B, 55, 60, 40, 40, ['#2c4a2a', '#3d6a3a', '#4f7a42', '#5f8a4a'], R, 5);
+  for (let i = 0; i < 6; i++) pBlob(B, 20 + R() * 70, 35 + R() * 45, 3.5, '#4a0f1a', '#8a1f2a', '#e05a6a');
 }
 // hedge block, one tile wide; variant bits: 1 = joins left, 2 = joins right
 function paintHedge(B, R, v) {
