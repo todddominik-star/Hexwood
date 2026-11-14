@@ -242,6 +242,38 @@ IDEAS PARKED
 ------------
   - Orbs may shatter after many recharges (age/use) -> needs replacing.
 
+THE VILLAGE (design in progress, Nov 13)
+----------------------------------------
+Just outside town: from the hut, a short walk through another grassy area
+with a few trees leads to the village. Quaint storybook village (think
+Beauty and the Beast). Up the river we already have.
+River: comes down from a mountain area (not in this build) running north/
+south, bends and runs east/west BELOW the village -> an L. Village sits in
+the upper right of the L, east of the stream.
+
+Todd's map:
+  .  grass or rocks    R river    B bridge    S structure
+  |  north/south road  -  east/west road
+
+  ..R......|......
+  ..R..S.S.|.S.S..
+  --B-------------
+  ..R..S.S.|.S.S..
+  --R-------------
+  ..R..S.S.|.S.S..
+  ...R.....|......
+  ....RRRRRBRRRRRR
+  .........-------  > To our hut
+
+Buildings (12): bakery, smithy, clothier/fabric, leather goods, crafting
+  supplies, and homes just for living/sleeping. Each needs a touch of magic
+  and a new resident to come alive.
+Residents: freed critters move in (chipmunks, squirrels, rabbits, raccoons,
+  owls, birds of a few colors, mice; open to more). Cats OK but no pets or
+  familiars; Fennel is the one companion.
+Commerce: none, or barter at most. Fixed-up shops are mostly for the hero.
+OPEN: restocking (how does the leather shop get more leather?).
+
 
 NEXT UP
 ------------------
