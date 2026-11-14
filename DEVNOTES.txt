@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v2 (Nov 13, 2026)
+Current version: v3 (Nov 13, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -224,6 +224,19 @@ v2 CHANGES (from Todd's play notes, Nov 13)
     join into rows. Painted rocks, standing stones, timber-frame hut.
     Gray-to-color now blooms in larger patches.
   - Install: icons + service worker, so Chrome offers "Install".
+v3 CHANGES (Todd's v2 notes, Nov 13)
+-----------------------------------
+  - Fixed: Fennel asked again for a treat you had already handed her through
+    "Give a treat". Requests now count as met however you gave the item.
+  - Messages: "More" only shows when there is another page. On the last (or
+    only) page, touching to walk closes it. Tapping still closes it too.
+  - Fennel outdoors: no more "Talk to Fennel" label following you. Tap her
+    directly to talk.
+  - Kindness is now quiet: no numbers anywhere. When it runs out and you ask
+    for an enchantment, Fennel says she's tired and asks for one specific
+    treat (inkberries or wild strawberries). Give it and she's ready again.
+    Treats given any other time just count, silently.
+
 
 IDEAS PARKED
 ------------
@@ -262,6 +275,8 @@ SESSION LOG
 2026-11-13  Todd's v1 play notes -> v2: tap-the-thing, non-blocking
             notices, smarter Fennel with kindness + rune circle, un-hex as
             Fennel's gift, crafting shows formulas, painted art, install.
+            Todd's v2 notes -> v3: Fennel request fix, messages close when
+            you walk, tap-only Fennel outdoors, quiet kindness.
 
 
 TODD'S NOTES

@@ -473,10 +473,12 @@ function fennelPos() {
 // Requests she makes as you progress. Handing over the item earns a hint and kindness.
 function pendingRequest() {
   if (!G.flag('fairyFree')) return null;
-  if (!G.flag('bookFound') && !S.gifts.r1) return { id: 'r1', item: 'honeycake', ask: 'FENNEL: I\'m so hungry... Is there anything sweet in the cupboard? Those doors are far too heavy for me.' };
-  if (G.flag('bookFound') && !(S.pages.write && S.pages.write.cast) && !S.gifts.r2) return { id: 'r2', item: 'dew', ask: 'FENNEL: I\'m parched. There\'s a thimble of dew on the windowsill, but it\'s heavier than I am.' };
-  if (S.pages.write && S.pages.write.cast && !(S.pages.light && S.pages.light.cast) && !S.gifts.r3) return { id: 'r3', item: 'button', ask: 'FENNEL: Ooh, that brass button in the sewing basket! It\'s so shiny. Could you bring it to me?' };
-  if (G.flag('keyTaken') && !G.flag('unhexKnown')) return { id: 'r4', item: 'honey', ask: 'FENNEL: Old Moss kept a jar of wildflower honey in the cellar. Bring me a taste and I\'ll teach you something wonderful. Something you\'ll need out there.' };
+  const given = (k) => S.given && S.given[k];
+  // a request counts as met if you ever gave her that item, however you gave it
+  if (!G.flag('bookFound') && !given('honeycake')) return { item: 'honeycake', ask: 'FENNEL: I\'m so hungry... Is there anything sweet in the cupboard? Those doors are far too heavy for me.' };
+  if (G.flag('bookFound') && !(S.pages.write && S.pages.write.cast) && !given('dew')) return { item: 'dew', ask: 'FENNEL: I\'m parched. There\'s a thimble of dew on the windowsill, but it\'s heavier than I am.' };
+  if (S.pages.write && S.pages.write.cast && !(S.pages.light && S.pages.light.cast) && !given('button')) return { item: 'button', ask: 'FENNEL: Ooh, that brass button in the sewing basket! It\'s so shiny. Could you bring it to me?' };
+  if (G.flag('keyTaken') && !G.flag('unhexKnown')) return { item: 'honey', ask: 'FENNEL: Old Moss kept a jar of wildflower honey in the cellar. Bring me a taste and I\'ll teach you something wonderful. Something you\'ll need out there.' };
   return null;
 }
 function teachUnhex() {
@@ -486,40 +488,56 @@ function teachUnhex() {
     'Fennel takes your hand and draws a little looping shape in the air. Your fingertips tingle.',
     'FENNEL: That\'s the un-hexing touch. Walk up to any hexed creature and tap it, gently.'];
 }
+// Kindness is kept quietly. It is never shown as a number.
 function giveTreat(k) {
+  const req = pendingRequest();
   G.take(k); S.favor = (S.favor || 0) + 1;
+  S.given = S.given || {}; S.given[k] = true;
   burst(fennelPos().x, fennelPos().y, '#fff3b0', 16); blip(1400); save();
   let lines = [`You give Fennel the ${ITEMS[k].name}.`];
-  if (k === 'honey' && !G.flag('unhexKnown')) lines = lines.concat(teachUnhex());
-  else lines.push('FENNEL: For me? You\'re a treasure. I\'ll remember this!');
-  lines.push(`(Fennel's kindness: ${S.favor}. Each enchantment uses 1.)`);
-  return lines;
+  if (k === 'honey' && !G.flag('unhexKnown')) return lines.concat(teachUnhex());
+  if (S.fennelWants && S.fennelWants === k) {
+    S.fennelWants = null; save();
+    return lines.concat([`FENNEL: ${ITEMS[k].name}! Oh, I feel sparkly again. Now, what did you want enchanted?`]);
+  }
+  if (req && req.item === k) return lines;  // the thank-you and hint follow
+  const thanks = ['FENNEL: For me? You\'re a treasure.', 'FENNEL: Oh, how lovely! Thank you, friend.', 'FENNEL: Mmm! You always know just what I like.', 'FENNEL: You spoil me. I won\'t forget it!'];
+  return lines.concat([thanks[(S.favor || 0) % thanks.length]]);
 }
 function talkFairy() {
   const opts = ['Ask for a hint'], acts = [hintFairy];
   if (treatsHeld().length) { opts.push('Give a treat'); acts.push(treatMenu); }
-  if (RECIPES.some(r => r.station === 'fairy' && S.pages[r.page])) { opts.push(`Enchant something (kindness ${S.favor || 0})`); acts.push(() => openStation('fairy')); }
+  if (RECIPES.some(r => r.station === 'fairy' && S.pages[r.page])) { opts.push('Enchant something'); acts.push(() => openStation('fairy')); }
   opts.push('Goodbye'); acts.push(() => { });
   choice('FENNEL: Hello, friend! What can I do for you?', opts, i => acts[i]());
 }
 function treatMenu() {
   const t = treatsHeld();
-  choice('Which treat?', t.map(k => `${ITEMS[k].icon} ${ITEMS[k].name}`).concat(['Never mind']), i => { if (i < t.length) say(giveTreat(t[i])); });
+  choice('Which treat?', t.map(k => `${ITEMS[k].icon} ${ITEMS[k].name}`).concat(['Never mind']), i => {
+    if (i >= t.length) return;
+    const req = pendingRequest();
+    if (req && req.item === t[i] && req.item !== 'honey') say(giveTreat(t[i]).concat(['FENNEL: Just what I was hoping for! Now, let me think...'], smartHint()));
+    else say(giveTreat(t[i]));
+  });
 }
 function hintFairy() {
   const req = pendingRequest();
   if (req) {
     if (G.has(req.item)) {
-      S.gifts[req.id] = true;
-      let lines = giveTreat(req.item);
-      if (req.item !== 'honey') lines = lines.slice(0, 1).concat(['FENNEL: Oh! Just what I wanted. Now, let me think...'], smartHint(), lines.slice(-1));
-      say(lines);
+      const lines = giveTreat(req.item);
+      say(req.item === 'honey' ? lines : lines.concat(['FENNEL: Oh! Just what I wanted. Now, let me think...'], smartHint()));
     } else say([req.ask]);
     return;
   }
   say(smartHint());
 }
-// Location-aware hints: everything you could do next, then the closest one wins.
+// When her sparkle runs out she asks for one particular treat.
+function fennelTired() {
+  if (!S.fennelWants) S.fennelWants = S.flags.doorOpen ? (hash(S.time | 0, 3) < 0.5 ? 'strawberry' : 'inkberry') : 'inkberry';
+  save();
+  const where = { strawberry: 'some wild strawberries from the meadow', inkberry: 'a few inkberries' }[S.fennelWants];
+  return [`FENNEL: Oh... I'm so tired, my sparkle has gone all dim. If you brought me ${where}, I'm sure I'd perk right up.`];
+}
 function smartHint() {
   const T = [];
   const F = (k) => G.flag(k), has = G.has, pg = S.pages;
@@ -609,10 +627,11 @@ window.addEventListener('keydown', e => {
   }
 });
 window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener('keydown', e => { if (['arrowleft', 'arrowright', 'arrowup', 'arrowdown', 'w', 'a', 's', 'd'].includes(e.key.toLowerCase())) dismissByMove(); });
 cv.addEventListener('pointerdown', e => {
   audioInit();
   down = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
-  if (dlg.open) return;
+  if (dlg.open) { if (!dismissByMove()) return; down.moveStart = true; }
   joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY };
   cv.setPointerCapture(e.pointerId);
 });
@@ -620,7 +639,7 @@ cv.addEventListener('pointermove', e => { if (joy && e.pointerId === joy.id) { j
 const endJoy = e => {
   if (down && e.pointerId === down.id && e.type === 'pointerup') {
     const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y), dt = performance.now() - down.t;
-    if (moved < 12 && dt < 450) handleTap(e.clientX, e.clientY);
+    if (moved < 12 && dt < 450 && !down.moveStart) handleTap(e.clientX, e.clientY);
   }
   down = null;
   if (joy && e.pointerId === joy.id) joy = null;
@@ -666,10 +685,6 @@ function findActs() {
       out.push({ d, a, x: c.x - 0.4, y: c.y - 0.45, w: 0.8, h: 0.8, id: c.id });
     }
   }
-  if (S.map === 'out' && S.fairyOut && fairyRT) {
-    const d = Math.hypot(S.px - fairyRT.x, S.py - fairyRT.y) - 0.3;
-    if (d < 1.3) out.push({ d, a: { label: 'Talk to Fennel', fn: talkFairy }, x: fairyRT.x - 0.35, y: fairyRT.y - 0.4, w: 0.7, h: 0.7, id: 'fennel' });
-  }
   out.sort((a, b) => a.d - b.d);
   return out.slice(0, 3);
 }
@@ -679,6 +694,11 @@ function handleTap(x, y) {
   if (paused) return;
   for (const t of acts) if (t.pill && inRect(x, y, t.pill)) { doTarget(t); return; }
   for (const t of acts) if (t.box && inRect(x, y, t.box)) { doTarget(t); return; }
+  // Fennel outdoors: only when you tap her
+  if (S.map === 'out' && S.fairyOut && fairyRT) {
+    const fx = fairyRT.x * TS - camX, fy = fairyRT.y * TS - camY - TS * 0.1;
+    if (Math.hypot(x - fx, y - fy) < TS * 0.7) { audioInit(); talkFairy(); }
+  }
 }
 function inRect(x, y, r) { return x >= r.x && y >= r.y && x <= r.x + r.w && y <= r.y + r.h; }
 function drawActs(t) {
@@ -721,10 +741,12 @@ function showLine() {
   const t = dlg.lines[0] || '';
   const m = t.match(/^([A-Z]+):\s(.*)$/);
   $('dtext').innerHTML = m ? `<b>${m[1][0] + m[1].slice(1).toLowerCase()}</b> ${esc(m[2])}` : esc(t);
-  $('dmore').style.display = 'block';
+  $('dmore').style.display = dlg.lines.length > 1 ? 'block' : 'none';
   dlg.shown = performance.now();
 }
 function esc(s) { return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+function lastPage() { return dlg.open && !dlg.choosing && dlg.lines.length <= 1; }
+function dismissByMove() { if (lastPage() && performance.now() - dlg.shown > 250) { dlg.shown = 0; advance(); return true; } return false; }
 function advance() {
   if (!dlg.open || dlg.choosing) return;
   if (performance.now() - dlg.shown < 300) return;
@@ -797,7 +819,7 @@ function openPanel(kind) {
       if (!items.length) return;
       any = true;
       html += `<h3>${label}</h3><div class="grid">` + items.map(id =>
-        `<div class="item"><span class="ic">${ITEMS[id].icon}</span><span class="nm">${ITEMS[id].name}${S.inv[id] > 1 ? ' ×' + S.inv[id] : ''}</span><span class="ds">${ITEMS[id].desc}${TREATS.includes(id) ? ' <i>Fennel likes these.</i>' : ''}</span></div>`).join('') + '</div>';
+        `<div class="item"><span class="ic">${ITEMS[id].icon}</span><span class="nm">${ITEMS[id].name}${S.inv[id] > 1 ? ' ×' + S.inv[id] : ''}</span><span class="ds">${ITEMS[id].desc}</span></div>`).join('') + '</div>';
     });
     if (!any) html = '<p class="muted">Empty. Look closely at things to find what you need.</p>';
   } else if (kind === 'pouch') {
@@ -829,7 +851,6 @@ function openPanel(kind) {
     html += '</div>';
     const freed = Object.keys(S.freed).length;
     html += `<h3>Creatures freed</h3><p>${freed} of ${CREATURES.length}</p>`;
-    html += `<h3>Fennel's kindness</h3><p>${S.favor || 0} (each enchantment uses 1; treats add 1)</p>`;
     if (S.log && S.log.length) html += '<h3>Recent happenings</h3>' + S.log.slice(0, 15).map(l => `<div class="logline">${esc(l)}</div>`).join('');
     S.clues.forEach(c => delete c.isNew); S.newJournal = false;
   }
@@ -844,10 +865,9 @@ function openPanel(kind) {
 function openStation(st, backTo) {
   const list = RECIPES.filter(r => r.station === st && S.pages[r.page]);
   let html = '';
-  if (st === 'fairy') html += `<p class="muted">Fennel's kindness: <b>${S.favor || 0}</b>. Each enchantment uses 1. Bring her treats to add more.</p>`;
   if (!list.length) html += '<p class="muted">Nothing you know how to make here yet.</p>';
   list.forEach(r => {
-    const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k])) && (st !== 'fairy' || (S.favor || 0) > 0);
+    const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k]));
     const out = r.makes ? ITEMS[r.makes] : SPELL_ITEMS[r.spell];
     const known = r.spell ? (S.pages[r.page].cast ? out.name : (out.shape === 'orb' ? 'an unknown orb' : 'an unknown powder')) : out.name;
     html += `<div class="recipe"><div class="out">${out.icon} ${r.verb} → ${known}</div><div class="needs">` +
@@ -875,7 +895,7 @@ function openStation(st, backTo) {
 function make(id, backTo) {
   const r = RECIPES.find(r => r.id === id);
   if (!Object.keys(r.needs).every(k => G.has(k, r.needs[k]))) return;
-  if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(['FENNEL: I\'d love to... but my sparkle is running low. A little treat would help!']); return; }
+  if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(fennelTired()); return; }
   if (r.spell && S.pouch.length >= 6) { closePanel(); say(['Your pouch is full.']); return; }
   Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
   if (r.station === 'fairy') S.favor--;
@@ -893,7 +913,7 @@ function make(id, backTo) {
   chime(2); save();
   const nm = S.pages[r.page].cast ? d.name : (d.shape === 'orb' ? 'an unknown orb' : 'an unknown powder');
   say(r.station === 'fairy'
-    ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch. (Kindness left: ${S.favor})`]
+    ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch.`]
     : [`You work everything together on the bench into ${nm}.`, `${d.icon} It goes into your Spell Pouch. Open the Pouch to cast it.`]);
 }
 
@@ -1610,6 +1630,8 @@ function startGame(fresh) {
   }
   // repair chain state from a save made mid-sequence
   if (S.flags.chainChip) { S.flags.chipsInHollow = true; if (!S.clues.find(c => c.id === 'chipmunks')) S.clues.push({ id: 'chipmunks', text: CLUES.chipmunks, done: false }); }
+  S.given = S.given || {};
+  if (S.gifts) { if (S.gifts.r1) S.given.honeycake = true; if (S.gifts.r2) S.given.dew = true; if (S.gifts.r3) S.given.button = true; }
   for (const k in S.zones) zoneDisp[k] = S.zones[k];
   rebuildSolids(); spawnCreatures();
   $('title').classList.add('hide');

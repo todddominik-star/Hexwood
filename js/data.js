@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v2';
+const VERSION = 'v3';
 
 // ---------------------------------------------------------------- items
 const ITEMS = {
