@@ -809,6 +809,9 @@ function smartHint() {
   if (F('bridgeMended') && !S.visited.westbank) T.push({ map: 'village', x: 1, y: 13.5, text: 'The bridge is whole again. The road west goes down to a pond. I\'ve heard frogs there.' });
   if (F('leatherMended') && !F('bigPouch') && G.count('fungus') < 3) T.push({ map: 'road', x: 5.5, y: 4.5, text: 'Rufus needs tinder fungus. Shelf mushrooms grow on the dead trees.' });
   if (F('frogsSang') && (!F('islandWisp') || !F('pearlTaken'))) at('islandwisp', 'The frogs\' clue... lily pads in the pond. Hop across to the island!');
+  // never point at places you can't reach yet
+  const reachable = (m) => m === null || m !== 'westbank' || F('bridgeMended');
+  for (let i = T.length - 1; i >= 0; i--) if (!reachable(T[i].map)) T.splice(i, 1);
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
   const dist = (t) => (t.pri ? -100 : 0) + (t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y));
