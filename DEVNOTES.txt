@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v5 (Nov 14, 2026)
+Current version: v6 (Nov 14, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -322,6 +322,41 @@ v5 FIXES (Todd's v4 notes, Nov 14):
     Bruno) wait outside by their shop doors.
   - Checked the library brambles layout: correct as built.
 
+v6 BUILT (Nov 14, "the river side of town"):
+  - Text touch-ups: hut quilt and painting show color once the hut is
+    restored; the window view and the well change as the forest returns.
+  - Spell #5 MEND (powder, one pinch per repair). The 5th Write (chest Wisp
+    Feather) writes it. Pine resin (tall pointed pines) + spider silk (old
+    webs) -> Mending Paste at the bench -> Fennel enchants.
+  - THE MILL: Mend the cracked wheel -> Barnaby the beaver; first 2 flour
+    free. Trades: 4 planks for an apple turnover; 3 flour for a strawberry
+    shortcake (Rosie now makes shortcake: 1 flour + 2 strawberries). The
+    mill restocks itself; you just keep Barnaby fed.
+  - LEATHER GOODS: Mend the broken door/window -> Rufus the raccoon. Works
+    mushroom leather: tinder fungus (from dead trees) x3 + berry tart ->
+    leather spell pouch, holds 9 spells.
+  - BRUNO: nails (1 iron-stone -> 4 nails). Orb rings are announced but need
+    COPPER (quarry past the old keep, not designed yet). The silver band on
+    Todd's existing orb stays.
+  - THE BROKEN BRIDGE: 4 planks + 4 nails to patch it, then Mend to make it
+    hold. Opens the road west.
+  - WILLOW BEND (new map, across the bridge): a pond with an island, a
+    second iron-stone source, pines, dead trees, webs, strawberries, 6 hexed
+    creatures.
+  - THIRD SECRET CHAIN: free the 4 frogs around the pond -> they sing, lily
+    pads rise to the island -> Wisp Feather + River Pearl curio.
+  - Dead trees now offer bark OR tinder fungus.
+
+NEEDS DESIGN NEXT (Todd to journal):
+  - The old keep and its copper quarry (orb rings).
+  - What's beyond the fallen trees on the north-west road (toward the
+    mountains the river comes from).
+  - Owl's Library + paper workshop chapter (books, copying tattered ones,
+    finding formulas).
+  - Clothier, Crafting Supplies, two cottages.
+  - The 6th Write: the spare Wisp Feather from the frogs' island has no
+    formula waiting yet.
+
 
 NEXT UP
 ------------------
@@ -360,6 +395,8 @@ SESSION LOG
 2026-11-13  Designed the village with Todd (his map). Built v4: Old Road,
   /14       Thistledown, Kindle, 4 restorable buildings, machete, orb band,
             songbird chain.
+2026-11-14  v5 fixes (black ground on old saves, critters walk indoors).
+            v6: Mend, Mill, Leather Goods, bridge, Willow Bend, frog chain.
 
 
 TODD'S NOTES

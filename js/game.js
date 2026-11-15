@@ -23,8 +23,8 @@ const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x 
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
 
 // ================================================================ maps
-const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't']);
-const OUTDOOR = ['out', 'road', 'village'];
+const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't', 'P', 'L']);
+const OUTDOOR = ['out', 'road', 'village', 'westbank'];
 const MAPS = {};
 function addMap(id, rows, dark) {
   MAPS[id] = { id, rows: rows.map(r => r.split('')), w: rows[0].length, h: rows.length, objs: OBJECTS.filter(o => o.map === id), solid: null };
@@ -35,6 +35,7 @@ addMap('cellar', CELLAR_MAP);
 addMap('out', buildOutdoor());
 addMap('road', buildRoad());
 addMap('village', buildVillage());
+addMap('westbank', buildWestbank());
 
 // ================================================================ state
 const SAVE_KEY = 'hexwood_save_v1';  // v2 keeps the same save slot
@@ -43,7 +44,7 @@ function newState() {
   return {
     ver: 1, map: 'hut', px: 3.5, py: 3.5, dir: 1,
     flags: {}, inv: {}, pouch: [], pages: {}, late: {}, revealed: {}, lanterns: {}, freed: {},
-    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1 },
+    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1, v_mill: 1, v_leather: 1, westbank: 1 },
     cut: {}, visited: {},
     clues: [], curios: {}, gifts: {}, maxCharge: 3, time: 0,
   };
@@ -123,6 +124,19 @@ const G = {
     notice(`${it.icon} You found a curio: ${it.name}! ${it.desc}`, 'journal');
   },
   burstAt(x, y, c) { burst(x, y, c, 24); },
+  webAct: () => G.count('silk') < 3 ? { label: 'Gather spider silk', fn: () => { G.give('silk'); } } : { label: 'Look at the web', fn: () => say(['An old, empty web, glittering with dew.']) },
+  buildBridge() {
+    G.take('planks', 4); G.take('nails', 4); S.flags.bridgeBuilt = true; save(); chime(2); burst(6, 13.5, '#d8b88a', 24);
+    say(['You lay the new planks across the gap and nail them down, tap tap tap.', 'It looks like a bridge again... but it wobbles. It needs mending to be safe.']);
+  },
+  islandCheck() { if (G.flag('islandWisp') && G.flag('pearlTaken')) resolveClue('frogs'); },
+  zoneGray: (id) => S.zones[id] === undefined ? 1 : S.zones[id],
+  outsideView() {
+    const out = ['grove', 'stones', 'yard', 'meadow', 'brook'], done = out.filter(z => S.zones[z] === 0).length;
+    if (done === 0) return 'Outside, the whole forest is gray.';
+    if (done < out.length) return 'Outside, patches of green and gold have come back to the forest, but some of it is still gray.';
+    return 'Outside, the forest is green and bright again. Birds are flitting through the trees.';
+  },
   unbandedOrbs: () => S.pouch.filter(p => SPELL_ITEMS[p.type].shape === 'orb' && !p.band),
   visitShop(st) { visitShop(st); },
   openHome1() {
@@ -153,7 +167,7 @@ const G = {
 };
 
 // ================================================================ zones
-function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village); }
+function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank); }
 function zoneAt(map, x, y) {
   const list = ZONES[map];
   for (const z of list) { const r = z.rect; if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return z; }
@@ -181,6 +195,7 @@ function objVisible(o) {
   return true;
 }
 function rebuildSolids() {
+  if (S && S.flags.bridgeMended) { MAPS.village.rows[13][5] = 'n'; MAPS.village.rows[13][6] = 'n'; }
   for (const id in MAPS) {
     const m = MAPS[id];
     m.solid = new Uint8Array(m.w * m.h);
@@ -197,6 +212,7 @@ function solidAt(map, tx, ty) {
   const c = m.rows[ty][tx];
   if (c === 'x') return !(S.revealed.hollowgate && G.flag('chainChip'));
   if (c === 't') return !S.cut[map + ':' + tx + ',' + ty];
+  if (c === 'L') return !G.flag('frogsSang');
   if (SOLID_TILES.has(c)) return true;
   return m.solid && m.solid[ty * m.w + tx] === 1;
 }
@@ -241,7 +257,8 @@ function spawnCreatures() {
       c.hx = c.x = 2.6 + (i % 3) * 1.4; c.hy = c.y = 2.6 + Math.floor(i / 3) * 1.6;
     }
     if (d.lead && S.freed[d.id] && !G.flag(d.lead.flag)) { c.mode = 'lead'; }
-    if (d.species === 'bird' && G.flag('chainBird')) c.gone = true;   // the songbirds now live by the library
+    if (d.species === 'bird' && G.flag('chainBird')) c.gone = true;
+    if (d.species === 'frog' && d.map === 'westbank' && G.flag('frogsSang')) { const i = ['w_frog1', 'w_frog2', 'w_frog3', 'w_frog4'].indexOf(d.id); c.x = c.hx = 10.5 + i; c.y = c.hy = 10.5; }   // the songbirds now live by the library
     return c;
   });
   RESIDENTS.filter(r => r.map === S.map && r.when()).forEach(r => creatures.push({ def: r, id: r.id, x: r.x, y: r.y, hx: r.x, hy: r.y, mode: 'free', t: Math.random() * 10, tx: r.x, ty: r.y, face: 1, resident: true }));
@@ -278,6 +295,8 @@ function unhex(c) {
   // secret chain: six chipmunks (no hint until it completes)
   const chips = CREATURES.filter(k => k.species === 'chipmunk');
   if (!G.flag('chainChip') && chips.every(k => S.freed[k.id])) setTimeout(startChain, 900);
+  const frogs = CREATURES.filter(k => k.map === 'westbank' && k.species === 'frog');
+  if (!G.flag('frogsSang') && d.map === 'westbank' && d.species === 'frog' && frogs.every(k => S.freed[k.id])) setTimeout(startFrogChain, 900);
   const birds = CREATURES.filter(k => k.species === 'bird');
   if (!G.flag('chainBird') && d.species === 'bird' && birds.every(k => S.freed[k.id])) setTimeout(startBirdChain, 900);
 }
@@ -297,6 +316,14 @@ function startChain() {
     c.mode = 'gather'; c.path = findPath('out', c.x, c.y, S.px, S.py);
   });
   chain = { phase: 'gather', t: 0 };
+}
+function startFrogChain() {
+  S.flags.frogsSang = true; rebuildSolids(); save();
+  addClue('frogs');
+  chime(4);
+  notice('🐸 Four frogs croak together in the reeds, a deep, happy chorus. A new clue is in your Journal.', 'journal');
+  ['w_frog1', 'w_frog2', 'w_frog3', 'w_frog4'].forEach((id, i) => { const c = creatures.find(c => c.id === id); if (c) { c.mode = 'fly'; c.flyStay = true; c.flyTo = { x: 10.5 + i, y: 10.5 }; } });
+  setTimeout(() => { burst(12, 10.5, '#c8f0a0', 30); toast('🪷 Lily pads rise up out of the pond!', 3500); }, 2500);
 }
 function startBirdChain() {
   S.flags.chainBird = true; rebuildSolids(); save();
@@ -376,6 +403,7 @@ function updateCreatures(dt) {
     }
     if (c.mode === 'fly') {
       const dx = c.flyTo.x - c.x, dy = c.flyTo.y - c.y, d = Math.hypot(dx, dy);
+      if (d < 0.2 && c.flyStay) { c.mode = 'free'; c.hx = c.x; c.hy = c.y; c.tx = c.x; c.ty = c.y; c.wt = c.t + 999; continue; }
       if (d < 0.2) { c.gone = true; burst(c.x, c.y, '#fff6c8', 10); if (S.map === 'village' && !creatures.some(k => k.mode === 'fly' && !k.gone)) spawnCreatures(); }
       else { c.x += dx / d * Math.min(d, 4 * dt); c.y += dy / d * Math.min(d, 4 * dt); c.face = dx < 0 ? -1 : 1; }
       continue;
@@ -484,6 +512,16 @@ function useSpell(i) {
     burst(S.px, S.py, '#fff0a8', 20);
     if (revealPage('light')) learned('light');
     save();
+  } else if (item.type === 'mendpowder') {
+    const target = MAPS[S.map].objs.find(o => o.mend && !G.flag(o.mend) && (!o.mendReady || o.mendReady()) && Math.hypot(S.px - clamp(S.px, o.tx, o.tx + o.tw), S.py - clamp(S.py, o.ty, o.ty + o.th)) < 1.4);
+    if (!target) {
+      const bridge = MAPS[S.map].objs.find(o => o.id === 'brokenbridge' && Math.hypot(S.px - (o.tx + 1), S.py - (o.ty + 0.5)) < 2);
+      say(bridge && !G.flag('bridgeBuilt') ? ['The powder can mend what\'s there... but half this bridge is simply gone. Lay new planks first.'] : ['You hold a pinch of the powder. Nothing nearby is broken.', '(Stand right beside something broken, then cast it.)']);
+      return;
+    }
+    S.pouch.splice(i, 1);
+    mendThing(target);
+    if (revealPage('mend')) setTimeout(() => learned('mend'), 1500);
   } else if (item.type === 'kindlecube') {
     const target = MAPS[S.map].objs.find(o => o.kindle && !G.flag(o.kindle) && Math.hypot(S.px - clamp(S.px, o.tx, o.tx + o.tw), S.py - clamp(S.py, o.ty, o.ty + o.th)) < 1.4);
     if (!target) { say(['You turn the warm cube over in your hand. Nothing nearby wants to burn forever.', '(Stand right beside something that needs a fire, then cast it.)']); return; }
@@ -510,11 +548,30 @@ function kindleBuilding(o) {
       'BRUNO: A proper forge again! Bring me iron-stone and I\'ll make you something useful. A bite of something sweet wouldn\'t hurt either.']);
   }
 }
+function mendThing(o) {
+  S.flags[o.mend] = true; rebuildSolids(); save();
+  chime(4); burst(o.tx + o.tw / 2, o.ty + o.th / 2, '#f2e6ff', 36);
+  if (o.id === 'mill') {
+    G.setZone('v_mill', 0); spawnCreatures();
+    G.give('flour', 2);
+    say(['You scatter the powder over the cracked wheel. The split wood creeps back together, and the hex lets go with a sigh.',
+      'The wheel creaks... and turns! Water splashes through the paddles.',
+      'A beaver in a dusty cap waddles up from the river. BARNABY: Well I never! My wheel! Here, take some flour, first sack\'s free.']);
+  } else if (o.id === 'leather') {
+    G.setZone('v_leather', 0); spawnCreatures();
+    say(['The powder sparkles across the cracked window and the broken door. Glass knits back together, the hinge straightens, and the hex fades away.',
+      'A raccoon in a tidy waistcoat strolls up, sniffing. RUFUS: Ah. My shop. Splendid. I work in mushroom leather, if you can find me some tinder fungus.']);
+  } else if (o.id === 'brokenbridge') {
+    say(['You sprinkle the powder along the new planks. The wood hums, settles, and holds firm.', 'The bridge is whole again. The road west is open!']);
+  }
+}
 function visitShop(st) {
+  if (st === 'mill') { choice('BARNABY: Hullo! Mind the flour dust.', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['BARNABY: The mill grinds on its own, but I get hungry. Bring me one of Rosie\'s strawberry shortcakes and I\'ll give you three sacks of flour.', 'BARNABY: And for an apple turnover I\'ll cut you a bundle of planks. I\'m very good with wood.']); else if (i === 1) openStation('mill'); }); return; }
+  if (st === 'leather') { choice('RUFUS: Good day. Looking for something fine?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['RUFUS: Tinder fungus grows on dead trees. Bring me three and one of Rosie\'s berry tarts, and I\'ll make you a proper leather spell pouch. Holds nine.']); else if (i === 1) openStation('leather'); }); return; }
   const talk = {
     bakery: ['ROSIE: Bring me two inkberries and two wild strawberries, and I\'ll bake you a berry tart. Two apples makes a turnover.', 'ROSIE: Everyone in this village has a sweet tooth. Bruno most of all.'],
     smithy: G.flag('macheteGot')
-      ? ['BRUNO: Two iron-stones and a tart, and I\'ll wrap one of your orbs in a silver band. Twice the magic it can hold.']
+      ? ['BRUNO: One iron-stone makes a good handful of nails.', 'BRUNO: I can wrap an orb in metal rings so it holds twice the magic. But I need copper for that, and copper comes from the old quarry out past the keep. Nobody gets out there these days.']
       : ['BRUNO: You\'ll want a machete for all these vines and brambles. Two iron-stones, a bit of dry bark for the handle, and one of Rosie\'s berry tarts.', 'BRUNO: Rusty red rocks along the old road are full of iron.'],
   }[st];
   choice(st === 'bakery' ? 'ROSIE: Hello, dear! What\'ll it be?' : 'BRUNO: Hmph. Hello. Need something?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(talk); else if (i === 1) openStation(st); });
@@ -724,6 +781,31 @@ function smartHint() {
     if (!F('weedsCut')) at('appletree', 'There\'s an apple tree on the old road, choked with weeds. Cut it free!');
     if (F('chainBird') && !F('chestOpen')) at('chest', 'The songbirds\' clue... brambles beside the library. Your machete can reach whatever is hiding there.');
   }
+  if (pg.mend) {
+    const targets = ['millMended', 'leatherMended', 'bridgeMended'].filter(k => !F(k)).length;
+    const have = S.pouch.filter(p => p.type === 'mendpowder').length + G.count('paste');
+    if (targets > have) {
+      if (has('paste')) now('Bring me the Mending Paste and choose "Enchant".');
+      else {
+        if (!has('resin')) T.push({ map: 'road', x: 8.5, y: 5.5, text: 'Mend needs pine resin. The tall pointed pines on the old road are sticky with it.' });
+        if (!has('silk')) at('web1', 'Mend needs spider silk. Look for old webs on the dead trees along the old road.');
+        if (has('resin') && has('silk')) at('bench', 'Work the resin and silk together at the workbench into Mending Paste.');
+      }
+    }
+    if (S.pouch.some(p => p.type === 'mendpowder')) {
+      if (!F('millMended')) at('mill', 'The mill\'s water wheel is cracked. Stand beside it and cast your Mend Powder.');
+      else if (!F('leatherMended')) at('leather', 'The leather shop\'s door and window are broken. Your Mend Powder could fix them.');
+      else if (F('bridgeBuilt') && !F('bridgeMended')) at('brokenbridge', 'The new planks on the bridge need mending to hold. Cast your Mend Powder beside it.');
+    }
+  }
+  if (F('millMended') && !F('bridgeBuilt')) {
+    if (G.count('planks') < 4) at('mill', 'Barnaby cuts planks in trade for an apple turnover. The broken bridge needs four.');
+    if (G.count('nails') < 4 && F('macheteGot')) at('smithy', 'Bruno makes nails from iron-stone. The bridge needs four.');
+    if (G.count('planks') >= 4 && G.count('nails') >= 4) at('brokenbridge', 'You have planks and nails. Patch the broken bridge!');
+  }
+  if (F('bridgeMended') && !S.visited.westbank) T.push({ map: 'village', x: 1, y: 13.5, text: 'The bridge is whole again. The road west goes down to a pond. I\'ve heard frogs there.' });
+  if (F('leatherMended') && !F('bigPouch') && G.count('fungus') < 3) T.push({ map: 'road', x: 5.5, y: 4.5, text: 'Rufus needs tinder fungus. Shelf mushrooms grow on the dead trees.' });
+  if (F('frogsSang') && (!F('islandWisp') || !F('pearlTaken'))) at('islandwisp', 'The frogs\' clue... lily pads in the pond. Hop across to the island!');
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
   const dist = (t) => t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y);
@@ -799,16 +881,24 @@ function findActs() {
   }
   for (let ty = Math.floor(S.py) - 1; ty <= Math.floor(S.py) + 1; ty++) for (let tx = Math.floor(S.px) - 1; tx <= Math.floor(S.px) + 1; tx++) {
     const c = m.rows[ty] && m.rows[ty][tx];
-    if (c !== 'K' && c !== 't') continue;
+    if (c !== 'K' && c !== 't' && c !== 'P') continue;
     const key = S.map + ':' + tx + ',' + ty;
     if (c === 't' && S.cut[key]) continue;
     const d = Math.hypot(S.px - clamp(S.px, tx, tx + 1), S.py - clamp(S.py, ty, ty + 1));
     if (d >= 0.95) continue;
     let a;
-    if (c === 'K') a = G.count('bark') < 3 ? { label: 'Peel some dry bark', fn: () => G.give('bark') } : { label: 'Look at the dead tree', fn: () => say(['A long-dead tree, its bark dry and papery. Shelf mushrooms grow in its cracks.']) };
+    if (c === 'P') a = G.count('resin') < 3 ? { label: 'Collect pine resin', fn: () => G.give('resin') } : { label: 'Look at the pine', fn: () => say(['A tall pine. Sticky resin beads on its bark.']) };
+    else if (c === 'K') {
+      const opts = [];
+      if (G.count('bark') < 3) opts.push(['Peel some dry bark', () => G.give('bark')]);
+      if (G.count('fungus') < 3) opts.push(['Pick a tinder fungus', () => G.give('fungus')]);
+      a = !opts.length ? { label: 'Look at the dead tree', fn: () => say(['A long-dead tree, its bark dry and papery. Shelf mushrooms grow in its cracks.']) }
+        : opts.length === 1 ? { label: opts[0][0], fn: opts[0][1] }
+        : { label: 'Gather from the dead tree', fn: () => choice('A long-dead tree. Dry bark, and shelf mushrooms in the cracks.', opts.map(o => o[0]).concat(['Never mind']), i => { if (i < opts.length) opts[i][1](); }) };
+    }
     else a = G.has('machete') ? { label: 'Cut the thicket', fn: () => { S.cut[key] = true; burst(tx + 0.5, ty + 0.5, '#9ad370', 20); blip(500); save(); } }
       : { label: 'Look at the thicket', fn: () => say(['A thorny tangle of brambles. You\'d need a sharp blade to get through.']) };
-    out.push({ d, a, x: tx, y: ty - (c === 'K' ? 0.6 : 0), w: 1, h: c === 'K' ? 1.6 : 1, id: key });
+    out.push({ d, a, x: tx, y: ty - (c !== 't' ? 0.6 : 0), w: 1, h: c !== 't' ? 1.6 : 1, id: key });
   }
   for (const c of creatures) {
     if (c.mode !== 'hexed') continue;
@@ -999,11 +1089,11 @@ function openPanel(kind) {
 function openStation(st, backTo) {
   const list = RECIPES.filter(r => r.station === st && (r.page ? S.pages[r.page] : (!r.req || r.req())));
   let html = '';
-  if ((st === 'bakery' || st === 'smithy') && !list.length) html += '<p class="muted">Nothing to trade right now.</p>';
+  if (['bakery', 'smithy', 'mill', 'leather'].includes(st) && !list.length) html += '<p class="muted">Nothing to trade right now.</p>';
   if (!list.length) html += '<p class="muted">Nothing you know how to make here yet.</p>';
   list.forEach(r => {
     const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k]));
-    const out = r.special ? { icon: r.icon, name: r.label } : r.makes ? ITEMS[r.makes] : SPELL_ITEMS[r.spell];
+    const out = r.special ? { icon: r.icon, name: r.label } : r.makes ? { icon: ITEMS[r.makes].icon, name: ITEMS[r.makes].name + (r.n ? ' ×' + r.n : '') } : SPELL_ITEMS[r.spell];
     const known = r.spell ? (S.pages[r.page].cast ? out.name : ({ orb: 'an unknown orb', powder: 'an unknown powder', cube: 'an unknown cube' }[out.shape])) : out.name;
     html += `<div class="recipe"><div class="out">${out.icon} ${r.verb} → ${known}</div><div class="needs">` +
       Object.keys(r.needs).map(k => `<span class="${G.has(k, r.needs[k]) ? 'have' : 'miss'}">${ITEMS[k].icon} ${ITEMS[k].name} ${G.count(k)}/${r.needs[k]}</span>`).join('') + '</div>';
@@ -1013,13 +1103,14 @@ function openStation(st, backTo) {
       const g = RECIPES.find(x => x.station === 'mortar' && x.makes === k && S.pages[x.page]);
       if (g && Object.keys(g.needs).every(n => G.has(n, g.needs[n]))) html += `<button class="side" data-grind="1">🥣 Grind ${ITEMS[Object.keys(g.needs)[0]].name} at the mortar</button> `;
     });
+    if (r.note && !ok) html += `<div class="muted small">${r.note}</div>`;
     html += `<button data-make="${r.id}" ${ok ? '' : 'disabled'}>${r.verb}</button></div>`;
   });
   // the formulas from the book, right where you work
   const pages = [...new Set(list.map(r => r.page).filter(Boolean))];
   if (pages.length) html += '<h3>📖 From your Spellbook</h3>' + pages.map(p => pageHtml(p, PAGE_ORDER.indexOf(p), true)).join('');
   if (backTo) html = `<button class="side back" data-back="1">← Back to the ${STATION_NAMES[backTo]}</button>` + html;
-  $('ptitle').textContent = ({ fairy: '🧚 ', mortar: '🥣 ', bench: '🔨 ', bakery: '🍞 ', smithy: '⚒️ ' }[st]) + STATION_NAMES[st];
+  $('ptitle').textContent = ({ fairy: '🧚 ', mortar: '🥣 ', bench: '🔨 ', bakery: '🍞 ', smithy: '⚒️ ', mill: '🌾 ', leather: '👜 ' }[st]) + STATION_NAMES[st];
   $('pbody').innerHTML = html;
   $('pbody').scrollTop = 0;
   $('pbody').querySelectorAll('[data-make]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); make(b.dataset.make, backTo); }));
@@ -1031,7 +1122,13 @@ function make(id, backTo) {
   const r = RECIPES.find(r => r.id === id);
   if (!Object.keys(r.needs).every(k => G.has(k, r.needs[k]))) return;
   if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(fennelTired()); return; }
-  if (r.spell && S.pouch.length >= 6) { closePanel(); say(['Your pouch is full.']); return; }
+  if (r.spell && S.pouch.length >= (S.pouchMax || 6)) { closePanel(); say(['Your pouch is full.']); return; }
+  if (r.special === 'bigpouch') {
+    Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
+    S.flags.bigPouch = true; S.pouchMax = 9; save(); closePanel(); chime(3);
+    say(['Rufus pounds and smooths the fungus into soft, supple leather, then stitches it into a handsome pouch.', 'RUFUS: There. Nine spells, snug as you like.', '👝 Your Spell Pouch now holds 9.']);
+    return;
+  }
   if (r.special === 'band') {
     const orbs = G.unbandedOrbs();
     closePanel();
@@ -1047,6 +1144,11 @@ function make(id, backTo) {
   if (r.station === 'fairy') S.favor--;
   if (S.map === 'hut') burst(S.px, S.py - 0.5, '#fff3b0', 12);
   if (r.makes === 'machete') { G.give('machete'); S.flags.macheteGot = true; save(); closePanel(); chime(3); say(['Bruno hammers, quenches, and polishes. He hands you a fine machete with a bark-wrapped grip.', 'BRUNO: For vines and brambles. Not fingers.', '(You can cut thickets, vines and weeds now.)']); return; }
+  if (r.station === 'smithy' || r.station === 'mill' || r.station === 'leather') {
+    G.give(r.makes, r.n || 1); closePanel(); chime(2);
+    say([{ smithy: 'Bruno hammers away at the anvil, sparks flying.', mill: 'Barnaby bustles off and comes back with his paws full.', leather: 'Rufus gets to work.' }[r.station], `You get ${ITEMS[r.makes].name}${r.n ? ' ×' + r.n : ''}.`]);
+    return;
+  }
   if (r.station === 'bakery') { G.give(r.makes); closePanel(); chime(2); say([`Rosie bustles about, and soon hands you a warm ${ITEMS[r.makes].name}.`, 'ROSIE: Fresh from the oven! It never goes cold now, you know.']); return; }
   if (r.makes) {
     G.give(r.makes); blip(800);
@@ -1181,6 +1283,8 @@ function edgeExits() {
   else if (S.map === 'road' && S.px > m.w - 0.45) G.goMap('out', 0.9, 17.5);
   else if (S.map === 'road' && S.px < 0.45) G.goMap('village', MAPS.village.w - 0.9, 25.5);
   else if (S.map === 'village' && S.px > m.w - 0.45) G.goMap('road', 0.9, 8.5);
+  else if (S.map === 'village' && S.px < 0.45) G.goMap('westbank', MAPS.westbank.w - 0.9, 13.5);
+  else if (S.map === 'westbank' && S.px > m.w - 0.45) G.goMap('village', 0.9, 13.5);
 }
 function updateFairy(dt) {
   if (!OUTDOOR.includes(S.map) || !G.flag('fairyFree')) return;
@@ -1248,7 +1352,9 @@ function render(t) {
   const isHedge = (x, y) => { const c = m.rows[y] && m.rows[y][x]; return c === 'h' || (c === 'x' && !hollowOpen()); };
   for (let y = y0; y <= y1 + 3 && y < m.h; y++) for (let x = Math.max(0, x0 - 1); x <= Math.min(m.w - 1, x1 + 1); x++) {
     const c = m.rows[y][x];
-    if (c === 'K') {
+    if (c === 'P') {
+      list.push({ y: y + 0.95, f: () => drawSprite('pine', (hash(x, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95, Math.sin(t * 0.8 + x * 0.7 + y) * 0.02) });
+    } else if (c === 'K') {
       list.push({ y: y + 0.95, f: () => drawSprite('dead', (hash(x, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.95, Math.sin(t * 0.6 + x) * 0.01) });
     } else if (c === 't' && !S.cut[S.map + ':' + x + ',' + y]) {
       list.push({ y: y + 0.9, f: () => drawSprite('bramble', (hash(x, y) * 3) | 0, tileGray(S.map, x, y), sx(x) + TS / 2, sy(y) + TS * 0.98) });
@@ -1399,7 +1505,17 @@ function drawTile(m, tx, ty, x, y, g, t) {
       ctx.fillRect(x, y + TS - 5, TS + 1, 5);
       break;
     }
-    case ',': case 'T': case 'B': case 'H': case 'K': case 't': drawGrass(x, y, g, tx, ty); break;
+    case ',': case 'T': case 'B': case 'H': case 'K': case 't': case 'P': drawGrass(x, y, g, tx, ty); break;
+    case 'L': {
+      ctx.fillStyle = C('#86c8ea', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.strokeStyle = C('#b8e2f7', g); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + TS * 0.15, y + TS * 0.3); ctx.quadraticCurveTo(x + TS * 0.35, y + TS * 0.2, x + TS * 0.55, y + TS * 0.3); ctx.stroke();
+      if (G.flag('frogsSang')) {
+        ctx.fillStyle = C('#5aa65a', g); ctx.beginPath(); ctx.arc(x + TS / 2, y + TS / 2, TS * 0.42, 0.3, Math.PI * 2 - 0.1); ctx.lineTo(x + TS / 2, y + TS / 2); ctx.fill();
+        ctx.fillStyle = C('#7cc677', g); ctx.beginPath(); ctx.arc(x + TS * 0.45, y + TS * 0.45, TS * 0.22, 0, 7); ctx.fill();
+        if ((tx + ty) % 2) { ctx.fillStyle = C('#f7c8e0', g); circ(x + TS * 0.7, y + TS * 0.3, TS * 0.08); ctx.fill(); }
+      }
+      break;
+    }
     case 'n': {
       ctx.fillStyle = C('#86c8ea', g); ctx.fillRect(x, y, TS + 1, TS + 1);
       const vert = (m.rows[ty - 1] && 'n='.includes(m.rows[ty - 1][tx])) || (m.rows[ty + 1] && 'n='.includes(m.rows[ty + 1][tx]));
@@ -1702,7 +1818,7 @@ const DRAW = {
       ctx.fillStyle = C('#e8434f', g); ctx.beginPath(); ctx.moveTo(px - w * 0.05, py + h * 0.04); ctx.lineTo(px + w * 0.05, py + h * 0.04); ctx.lineTo(px, py + h * 0.15); ctx.closePath(); ctx.fill(); }
   },
   building(o, x, y, w, h, g, t) {
-    const b = o.b, lit = o.kindle ? G.flag(o.kindle) : o.id === 'home1' ? G.flag('home1Open') : o.id === 'home2' ? G.flag('home2Open') : false;
+    const b = o.b, lit = o.kindle ? G.flag(o.kindle) : o.mend ? G.flag(o.mend) : o.id === 'home1' ? G.flag('home1Open') : o.id === 'home2' ? G.flag('home2Open') : false;
     const gg = lit ? 0 : 1;
     ctx.fillStyle = 'rgba(30,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w * 0.55, h * 0.14, 0, 0, 7); ctx.fill();
     const wg = ctx.createLinearGradient(x, 0, x + w, 0); wg.addColorStop(0, C(b.wall, gg)); wg.addColorStop(1, C('#b8a688', gg));
@@ -1747,6 +1863,8 @@ const DRAW = {
     // sign
     if (b.sign) { ctx.fillStyle = C('#e8d6a8', gg); rr(x + w * 0.62, y + h * 0.3, w * 0.16, h * 0.18, 4); ctx.fill(); ctx.strokeStyle = C('#7a543b', gg); ctx.lineWidth = 2; ctx.stroke();
       ctx.save(); if (!lit) ctx.filter = 'grayscale(1)'; ctx.font = `${Math.round(TS * 0.32)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(b.sign, x + w * 0.7, y + h * 0.4); ctx.restore(); }
+    if (o.id === 'leather' && !lit) { ctx.strokeStyle = 'rgba(40,40,40,0.8)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + w * 0.14, y + h * 0.5); ctx.lineTo(x + w * 0.24, y + h * 0.6); ctx.lineTo(x + w * 0.2, y + h * 0.68); ctx.lineTo(x + w * 0.31, y + h * 0.7); ctx.stroke(); }
+    if (b.wheel && !lit) { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x - w * 0.1, y + h * 0.5); ctx.lineTo(x + w * 0.05, y + h * 0.75); ctx.lineTo(x - w * 0.05, y + h * 0.95); ctx.stroke(); }
     if (b.wheel) { ctx.strokeStyle = C('#6a4a32', gg); ctx.lineWidth = 4; circ(x + w * 0.02, y + h * 0.75, h * 0.3); ctx.stroke(); for (let i = 0; i < 6; i++) { const a = i * 1.047 + (lit ? t : 0); ctx.beginPath(); ctx.moveTo(x + w * 0.02, y + h * 0.75); ctx.lineTo(x + w * 0.02 + Math.cos(a) * h * 0.3, y + h * 0.75 + Math.sin(a) * h * 0.3); ctx.stroke(); } }
     // the hex: drifting purple wisps
     if (!lit) for (let i = 0; i < 4; i++) { const k = (t * 0.25 + i / 4) % 1; ctx.fillStyle = `rgba(150,110,210,${0.35 * Math.sin(k * Math.PI)})`; circ(x + w * (0.15 + i * 0.22) + Math.sin(t + i) * 6, y + h * (0.9 - k * 1.1), TS * 0.16); ctx.fill(); }
@@ -1756,6 +1874,13 @@ const DRAW = {
     if (G.flag('weedsCut')) { const n = 3; for (let i = 0; i < 6; i++) { ctx.fillStyle = C('#e2403f', g); circ(x + w * (0.1 + hash(i, 7) * 0.8), y - h * (0.6 + hash(i, 8) * 1.1), TS * 0.07); ctx.fill(); } }
     else { ctx.strokeStyle = C('#6a7a42', g); ctx.lineWidth = 2.5; for (let i = 0; i < 10; i++) { const sx0 = x + w * (0.1 + hash(i, 4) * 0.8); ctx.beginPath(); ctx.moveTo(sx0, y + h); ctx.bezierCurveTo(sx0 + 8, y + h * 0.3, sx0 - 10, y - h * 0.4, sx0 + 4, y - h * (0.6 + hash(i, 5) * 0.8)); ctx.stroke(); }
       ctx.fillStyle = C('#7a8a4a', g); for (let i = 0; i < 18; i++) { ctx.beginPath(); ctx.ellipse(x + w * hash(i, 6), y + h * (0.9 - hash(i, 9) * 2), 4, 2.5, i, 0, 7); ctx.fill(); } }
+  },
+  web(o, x, y, w, h, g) {
+    const cx = x + w / 2, cy = y + h * 0.35, r = w * 0.4;
+    ctx.strokeStyle = `rgba(240,240,250,${0.75 - g * 0.3})`; ctx.lineWidth = 1;
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); ctx.stroke(); }
+    for (let k = 1; k <= 3; k++) { ctx.beginPath(); for (let i = 0; i <= 8; i++) { const a = i * Math.PI / 4, rr2 = r * k / 3.3; ctx.lineTo(cx + Math.cos(a) * rr2, cy + Math.sin(a) * rr2); } ctx.stroke(); }
+    if (Math.sin(Date.now() / 400 + o.tx) > 0.7) star(cx + r * 0.4, cy - r * 0.3, TS * 0.05, 'rgba(255,255,255,0.9)');
   },
   ironrock(o, x, y, w, h, g) {
     const rg2 = ctx.createRadialGradient(x + w * 0.38, y + h * 0.38, 2, x + w * 0.5, y + h * 0.6, w * 0.5);
@@ -1776,6 +1901,14 @@ const DRAW = {
       ctx.fillStyle = C('#d8b88a', g); ctx.beginPath(); ctx.ellipse(w * 0.55, 0, h * 0.06, h * 0.12, 0, 0, 7); ctx.fill(); ctx.restore(); }
   },
   brokenbridge(o, x, y, w, h, g) {
+    if (G.flag('bridgeBuilt')) {
+      const wob = Math.sin(Date.now() / 250) * 1.5;
+      ctx.fillStyle = C('#b8895f', g); ctx.fillRect(x, y + h * 0.1 + wob, w, h * 0.8);
+      ctx.strokeStyle = C('#7a5432', g); ctx.lineWidth = 2;
+      for (let i = 1; i < 8; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 8, y + h * 0.1 + wob); ctx.lineTo(x + i * w / 8, y + h * 0.9 + wob); ctx.stroke(); }
+      ctx.fillStyle = '#555'; for (let i = 0; i < 8; i++) { circ(x + (i + 0.5) * w / 8, y + h * 0.2 + wob, 1.5); ctx.fill(); circ(x + (i + 0.5) * w / 8, y + h * 0.8 + wob, 1.5); ctx.fill(); }
+      return;
+    }
     ctx.fillStyle = C('#a7794f', g); ctx.fillRect(x, y + h * 0.15, w * 0.32, h * 0.7); ctx.fillRect(x + w * 0.7, y + h * 0.15, w * 0.3, h * 0.7);
     ctx.strokeStyle = C('#7a5432', g); ctx.lineWidth = 2;
     for (let i = 1; i < 4; i++) { ctx.beginPath(); ctx.moveTo(x + i * w * 0.08, y + h * 0.15); ctx.lineTo(x + i * w * 0.08, y + h * 0.85); ctx.stroke(); }
@@ -1861,6 +1994,24 @@ function drawCreature(c, t) {
     ctx.beginPath(); ctx.moveTo(s * 0.07, -s * 0.12 - hop); ctx.lineTo(s * 0.09, -s * 0.2 - hop); ctx.lineTo(s * 0.12, -s * 0.13 - hop); ctx.fill();
     ctx.fillStyle = '#f3e2c8'; ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.08 - hop, s * 0.06, s * 0.05, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#222'; circ(s * 0.13, -s * 0.07 - hop, s * 0.016); ctx.fill();
+  } else if (sp === 'beaver') {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.24, s * 0.06, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#5a4030'; ctx.beginPath(); ctx.ellipse(-s * 0.22, s * 0.14, s * 0.12, s * 0.06, -0.2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8a5a36'; ctx.beginPath(); ctx.ellipse(0, s * 0.05, s * 0.2, s * 0.15, 0, 0, 7); ctx.fill();
+    circ(s * 0.16, -s * 0.07, s * 0.1); ctx.fill();
+    ctx.fillStyle = '#7a6a5a'; ctx.beginPath(); ctx.ellipse(s * 0.14, -s * 0.16, s * 0.1, s * 0.04, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff6e0'; ctx.fillRect(s * 0.2, -s * 0.02, s * 0.05, s * 0.05);
+    ctx.fillStyle = '#222'; circ(s * 0.2, -s * 0.09, s * 0.018); ctx.fill();
+  } else if (sp === 'raccoon') {
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.22, s * 0.06, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#8a8a8a'; ctx.lineWidth = s * 0.08; ctx.beginPath(); ctx.moveTo(-s * 0.15, s * 0.08); ctx.quadraticCurveTo(-s * 0.32, 0, -s * 0.28, -s * 0.16); ctx.stroke();
+    ctx.strokeStyle = '#3a3a3a'; ctx.lineWidth = s * 0.03; for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.arc(-s * 0.26, -s * 0.02 - k * s * 0.06, s * 0.04, 0, 3); ctx.stroke(); }
+    ctx.fillStyle = '#9a9a9a'; ctx.beginPath(); ctx.ellipse(0, s * 0.06, s * 0.16, s * 0.13, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#5a7a9a'; rr(-s * 0.1, -s * 0.02, s * 0.18, s * 0.14, 3); ctx.fill();
+    ctx.fillStyle = '#b0b0b0'; circ(s * 0.13, -s * 0.07, s * 0.1); ctx.fill();
+    ctx.fillStyle = '#2a2a2a'; ctx.beginPath(); ctx.ellipse(s * 0.15, -s * 0.08, s * 0.08, s * 0.03, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; circ(s * 0.17, -s * 0.08, s * 0.012); ctx.fill();
+    ctx.fillStyle = '#b0b0b0'; ctx.beginPath(); ctx.moveTo(s * 0.06, -s * 0.13); ctx.lineTo(s * 0.08, -s * 0.21); ctx.lineTo(s * 0.12, -s * 0.15); ctx.fill();
   } else if (sp === 'badger') {
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.25, s * 0.06, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#7a7a80'; ctx.beginPath(); ctx.ellipse(0, s * 0.06, s * 0.24, s * 0.15, 0, 0, 7); ctx.fill();

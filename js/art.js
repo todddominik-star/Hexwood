@@ -211,6 +211,7 @@ function paintHedge(B, R, v) {
 // which painted tree stands on a map tile
 function treeKind(c, x, y, m) {
   if (c === 'B') return 'birch';
+  if (c === 'P') return 'pine';
   const h = hash(x * 1.3 + 2, y * 0.7 + 5);
   if (m.id === 'out') {
     if (x === 0 || y === 0 || x === m.w - 1 || y === m.h - 1) return h < 0.45 ? 'pine' : 'oak';
