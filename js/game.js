@@ -692,12 +692,14 @@ function fennelTired() {
 function smartHint() {
   const T = [];
   const F = (k) => G.flag(k), has = G.has, pg = S.pages;
-  const at = (id, text) => { const p = objPos(id); T.push({ map: p.map, x: p.x, y: p.y, text }); };
+  let pri = false;   // ingredients for the spell you're working on come first
+  const at = (id, text) => { const p = objPos(id); T.push({ map: p.map, x: p.x, y: p.y, text, pri }); };
   const now = (text) => T.push({ map: null, text });
   const nextFormula = PAGE_ORDER.find(p => !pg[p]);
   if (!F('bookFound')) at('bureau', 'Old Moss locked his spellbook in the bureau. "From high to low, as light falls." He hid little marks on things. Something high, something in the middle, something low. Look closely!');
   // Write: only when there is a page to write and a feather to pay with
-  if (pg.write && nextFormula && has('wisp')) {
+  if (pg.write && nextFormula && has('wisp') && uncastCount() < 3) {
+    pri = true;
     if (has('writepowder_dummy')) { }
     const powder = S.pouch.some(p => p.type === 'writepowder');
     if (powder) now('You have Write Powder in your Pouch. Open the Pouch and cast it. It will use your Wisp Feather.');
@@ -708,10 +710,11 @@ function smartHint() {
         else if (!F('berriesTaken')) at('bowl', 'There are inkberries in the bowl on the table.');
         else at('berrybush', 'Inkberries grow on a bush in the sunny meadow.');
       }
-      if (!has('quill')) { if (!F('quillsTaken')) at('vase', 'Goose quills! There are some in the vase.'); else if (!F('outQuill')) at('goosequill', 'Geese drop quills down by the brook.'); }
+      if (!has('quill')) { if (!F('quillsTaken')) at('vase', 'Goose quills! There are some in the vase.'); else { at('goosequill', 'Write needs a goose quill. The geese drop them down by the brook, on the far bank past the stepping stones. There\'s usually one lying there.'); if (S.visited.westbank) at('goosequill2', 'Write needs a goose quill. Geese leave them by the pond at Willow Bend.'); } }
       if (has('ash') && has('berryink') && has('quill')) at('bench', 'You have everything for Write. Put it together at the workbench.');
     }
   }
+  pri = false;
   // Light
   if (pg.light && !S.pouch.some(p => p.type === 'lightorb')) {
     if (has('dimorb')) now('Bring the Dim Orb to me and choose "Enchant". That makes it a real spell.');
@@ -808,7 +811,7 @@ function smartHint() {
   if (F('frogsSang') && (!F('islandWisp') || !F('pearlTaken'))) at('islandwisp', 'The frogs\' clue... lily pads in the pond. Hop across to the island!');
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
-  const dist = (t) => t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y);
+  const dist = (t) => (t.pri ? -100 : 0) + (t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y));
   T.sort((a, b) => dist(a) - dist(b));
   return ['FENNEL: ' + T[0].text];
 }

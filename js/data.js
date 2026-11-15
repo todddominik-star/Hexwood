@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v6';
+const VERSION = 'v7';
 const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
@@ -534,8 +534,10 @@ const OBJECTS = [
     act: () => ({ label: 'Pick the shimmering flower', fn: () => { G.give('petal'); G.setFlag('flowerTaken'); G.say(['You pick a Shimmer Petal.']); } }) },
   { id: 'riverglass', map: 'out', tx: 16, ty: 24, solid: false, draw: 'pickup', icon: '🔹', vis: () => !F('glassTaken'),
     act: () => ({ label: 'Pick up the glass', fn: () => { G.give('riverglass'); G.setFlag('glassTaken'); G.say(['A smooth piece of River Glass, tumbled by the brook.']); } }) },
-  { id: 'goosequill', map: 'out', tx: 31, ty: 28, solid: false, draw: 'pickup', icon: '🪶', vis: () => !F('outQuill'),
-    act: () => ({ label: 'Pick up the feather', fn: () => { G.give('quill'); G.setFlag('outQuill'); G.say(['A goose quill, dropped by the brook.']); } }) },
+  { id: 'goosequill', map: 'out', tx: 31, ty: 28, solid: false, draw: 'pickup', icon: '🪶', vis: () => G.count('quill') < 2,
+    act: () => ({ label: 'Pick up the feather', fn: () => { G.give('quill'); G.setFlag('outQuill'); G.say(['A goose quill. The geese along the brook drop them all the time.']); } }) },
+  { id: 'goosequill2', map: 'westbank', tx: 21, ty: 11, solid: false, draw: 'pickup', icon: '🪶', vis: () => G.count('quill') < 2,
+    act: () => ({ label: 'Pick up the feather', fn: () => { G.give('quill'); G.say(['A goose quill, left by the pond.']); } }) },
   { id: 'rune', map: 'out', tx: 10, ty: 15, tw: 2, th: 2, solid: false, layer: 'floor', draw: 'rune',
     act: () => G.flag('fairyOutNow') ? null : ({ label: 'Look at the rune', fn: () => G.say(['An old rune circle set into the ground, carved with knots that loop forever.', F('fairyFree') ? 'When you stand on it, Fennel can find you.' : 'It hums very faintly.']) }) },
   { id: 'strawpatch', map: 'out', tx: 24, ty: 20, solid: false, draw: 'strawpatch',

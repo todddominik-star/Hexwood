@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v6 (Nov 14, 2026)
+Current version: v7 (Nov 14, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -346,6 +346,11 @@ v6 BUILT (Nov 14, "the river side of town"):
   - THIRD SECRET CHAIN: free the 4 frogs around the pond -> they sing, lily
     pads rise to the island -> Wisp Feather + River Pearl curio.
   - Dead trees now offer bark OR tinder fungus.
+
+v7 FIX (Nov 14): goose quills ran out (only 3 existed; 4+ Writes need 4+).
+  Quills now always turn up by the brook (far bank) and by the Willow Bend
+  pond when you have fewer than 2. Fennel now puts the ingredients for the
+  spell you're working on ahead of other hints.
 
 NEEDS DESIGN NEXT (Todd to journal):
   - The old keep and its copper quarry (orb rings).
