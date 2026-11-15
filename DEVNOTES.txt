@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v4 (Nov 14, 2026)
+Current version: v5 (Nov 14, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -313,6 +313,14 @@ v4 BUILT (Nov 14):
     the library hide an old chest (machete): Sturdy Boots (walk faster) and
     a Wisp Feather.
   - Freeing all village creatures (3 birds, 2 mice) colors the streets.
+
+v5 FIXES (Todd's v4 notes, Nov 14):
+  - Black ground on the Old Road and in town when continuing an older save
+    (new areas' color state wasn't set up on load). Fixed; also self-repairs.
+  - Moving in: chipmunks and squirrels now run up the street and in through
+    their cottage door, then peek out of the windows. Shopkeepers (Rosie,
+    Bruno) wait outside by their shop doors.
+  - Checked the library brambles layout: correct as built.
 
 
 NEXT UP

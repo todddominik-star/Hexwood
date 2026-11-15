@@ -128,13 +128,15 @@ const G = {
   openHome1() {
     S.flags.home1Open = true; rebuildSolids(); chime(3); burst(16, 11, '#c8f0a0', 30);
     G.setZone('v_home1', 0); spawnCreatures(); save();
-    say(['You hack away the hexed vines. They curl up and crumble to dust.', 'The door swings open, and a family of squirrels scampers in from the trees. They chatter at you happily.']);
+    moveIn('squirrel', 3, 'home1', [[21.5, 8.5], [22.5, 7.5], [21.5, 7.2]]);
+    say(['You hack away the hexed vines. They curl up and crumble to dust.', 'The door swings open, and a family of squirrels comes scampering down the street and straight in through the door.']);
   },
   openHome2() {
     S.flags.home2Open = true; chime(3); burst(16, 17.5, '#fff3b0', 30);
     G.setZone('v_home2', 0); spawnCreatures(); save();
+    moveIn('chipmunk', 6, 'home2', [[20.5, 20.5], [20.5, 21.3], [21.3, 20.8], [19.6, 21.5], [21.4, 21.6], [20.4, 22.2]]);
     say(['You hold your light to the window. The darkness inside shrinks back, then bursts like a soap bubble.',
-      'Warm light fills Lantern Cottage... and here come the chipmunks from the hollow, all six of them, to move in!']);
+      'Warm light fills Lantern Cottage... and here come the chipmunks from the hollow, all six of them, racing up the street and in through the front door!']);
   },
   openChest() {
     S.flags.chestOpen = true; chime(4); burst(7.5, 2.5, '#fff3b0', 30);
@@ -244,6 +246,17 @@ function spawnCreatures() {
   });
   RESIDENTS.filter(r => r.map === S.map && r.when()).forEach(r => creatures.push({ def: r, id: r.id, x: r.x, y: r.y, hx: r.x, hy: r.y, mode: 'free', t: Math.random() * 10, tx: r.x, ty: r.y, face: 1, resident: true }));
 }
+// Critters walk to a building's door and go inside; afterward they peek from its windows.
+function moveIn(species, n, bid, starts) {
+  const o = MAPS.village.objs.find(o => o.id === bid);
+  const door = { x: o.tx + o.tw / 2, y: o.ty + o.th + 0.45 };
+  for (let i = 0; i < n; i++) {
+    const [x, y] = starts[i % starts.length];
+    const c = { def: { species, id: 'mv' + i }, id: 'mv' + bid + i, x, y, hx: x, hy: y, mode: 'enter', t: Math.random() * 10, face: -1, wait: i * 0.45,
+      door, path: findPath('village', x, y, door.x, door.y) || [] };
+    creatures.push(c);
+  }
+}
 function speciesName(s) { return { chipmunk: 'chipmunk', butterfly: 'butterfly', bunny: 'bunny', frog: 'frog', firefly: 'firefly', bird: 'songbird', mouse: 'mouse', squirrel: 'squirrel', badger: 'badger' }[s] || s; }
 
 function unhex(c) {
@@ -351,6 +364,14 @@ function updateCreatures(dt) {
         if (d < 0.2) { c.gone = true; burst(tx, ty, '#e8ffd8', 12); blip(1500); }
         else { c.x += dx / d * Math.min(d, 3 * dt); c.y += dy / d * Math.min(d, 3 * dt); c.face = dx < 0 ? -1 : 1; }
       }
+      continue;
+    }
+    if (c.mode === 'enter') {
+      if (c.wait > 0) { c.wait -= dt; continue; }
+      if (c.path && c.path.length) { followPath(c, dt, 3.2); continue; }
+      const dx = c.door.x - c.x, dy = (c.door.y - 0.6) - c.y, d = Math.hypot(dx, dy);
+      if (d < 0.15) { c.gone = true; burst(c.x, c.y, '#fff6c8', 6); blip(1600); }
+      else { c.x += dx / d * Math.min(d, 2.5 * dt); c.y += dy / d * Math.min(d, 2.5 * dt); }
       continue;
     }
     if (c.mode === 'fly') {
@@ -480,7 +501,7 @@ function kindleBuilding(o) {
   if (o.id === 'bakery') {
     G.setZone('v_bakery', 0); spawnCreatures();
     say(['The cube flares in your hand and leaps into the oven. The bricks glow orange, and the fire settles in to stay.',
-      'Warm bread smell drifts out the door... and two rabbits hop in from the meadow, already tying on aprons.',
+      'Warm bread smell drifts down the street... and two rabbits hop in from the meadow, tying on aprons as they settle in by the bakery door.',
       'ROSIE: Oh! An oven that never goes cold! Come in, come in. Bring me ingredients and I\'ll bake you something lovely.']);
   } else if (o.id === 'smithy') {
     G.setZone('v_smithy', 0); spawnCreatures();
@@ -565,8 +586,7 @@ function teachUnhex() {
 function giveTreat(k) {
   const req = pendingRequest();
   G.take(k); S.favor = (S.favor || 0) + 1;
-  S.given = S.given || {}; S.cut = S.cut || {}; S.visited = S.visited || {};
-  for (const z of allZones()) if (S.zones[z.id] === undefined) S.zones[z.id] = 1; S.given[k] = true;
+  S.given = S.given || {}; S.given[k] = true;
   burst(fennelPos().x, fennelPos().y, '#fff3b0', 16); blip(1400); save();
   let lines = [`You give Fennel the ${ITEMS[k].name}.`];
   if (k === 'honey' && !G.flag('unhexKnown')) return lines.concat(teachUnhex());
@@ -1118,7 +1138,8 @@ function update(dt) {
   S.time += dt;
   for (const z of allZones()) {
     const t = S.zones[z.id];
-    if (zoneDisp[z.id] === undefined) zoneDisp[z.id] = t;
+    if (typeof t !== 'number') { S.zones[z.id] = 1; continue; }
+    if (typeof zoneDisp[z.id] !== 'number' || isNaN(zoneDisp[z.id])) zoneDisp[z.id] = t;
     zoneDisp[z.id] += (t - zoneDisp[z.id]) * Math.min(1, dt * 0.9);
     if (Math.abs(zoneDisp[z.id] - t) < 0.002) zoneDisp[z.id] = t;
   }
@@ -1705,6 +1726,19 @@ const DRAW = {
       if (dark) { ctx.fillStyle = 'rgba(160,110,220,0.5)'; circ(x + w * (a + 0.06), y + h * (c + 0.09), 2); ctx.fill(); circ(x + w * (a + 0.12), y + h * (c + 0.09), 2); ctx.fill(); }
       ctx.fillStyle = C('#5f412d', gg); ctx.fillRect(x + w * (a + 0.085), y + h * c, 2, h * 0.24);
     });
+    // residents peeking out of the windows
+    const movingIn = creatures.some(c => c.mode === 'enter' && !c.gone);
+    const peek = movingIn ? null : o.id === 'home2' && G.flag('home2Open') ? '#c98a55' : o.id === 'home1' && G.flag('home1Open') ? '#c9773f' : null;
+    if (peek) [[0.14, 0.48], [0.68, 0.48]].forEach(([a, c], i) => {
+      const bob = Math.max(0, Math.sin(t * 1.3 + i * 2.1)) * h * 0.05;
+      const px = x + w * (a + 0.09), py = y + h * (c + 0.2) - bob;
+      ctx.save(); rr(x + w * a, y + h * c, w * 0.18, h * 0.24, 2); ctx.clip();
+      ctx.fillStyle = peek; circ(px, py, w * 0.05); ctx.fill();
+      circ(px - w * 0.035, py - w * 0.04, w * 0.018); ctx.fill(); circ(px + w * 0.035, py - w * 0.04, w * 0.018); ctx.fill();
+      ctx.fillStyle = '#222'; circ(px - w * 0.017, py - w * 0.006, w * 0.007); ctx.fill(); circ(px + w * 0.017, py - w * 0.006, w * 0.007); ctx.fill();
+      ctx.fillStyle = '#f3e2c8'; circ(px, py + w * 0.02, w * 0.016); ctx.fill();
+      ctx.restore();
+    });
     // door
     ctx.fillStyle = C('#5f412d', gg); rr(x + w * 0.4, y + h * 0.6, w * 0.2, h * 0.4, 8); ctx.fill();
     ctx.fillStyle = C(lit ? '#a7794f' : '#8a6a4a', gg); rr(x + w * 0.42, y + h * 0.63, w * 0.16, h * 0.37, 6); ctx.fill();
@@ -1886,7 +1920,8 @@ function startGame(fresh) {
   }
   // repair chain state from a save made mid-sequence
   if (S.flags.chainChip) { S.flags.chipsInHollow = true; if (!S.clues.find(c => c.id === 'chipmunks')) S.clues.push({ id: 'chipmunks', text: CLUES.chipmunks, done: false }); }
-  S.given = S.given || {};
+  S.given = S.given || {}; S.cut = S.cut || {}; S.visited = S.visited || {};
+  for (const z of allZones()) if (typeof S.zones[z.id] !== 'number') S.zones[z.id] = 1;
   if (S.gifts) { if (S.gifts.r1) S.given.honeycake = true; if (S.gifts.r2) S.given.dew = true; if (S.gifts.r3) S.given.button = true; }
   for (const k in S.zones) zoneDisp[k] = S.zones[k];
   rebuildSolids(); spawnCreatures();

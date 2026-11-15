@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v4';
+const VERSION = 'v5';
 const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
@@ -505,7 +505,7 @@ const OBJECTS = [
     act: () => G.flag('bakeryLit') ? { label: 'Visit the bakery', fn: () => G.visitShop('bakery') }
       : { label: 'Look at the bakery', fn: () => G.say(['The Bakery. Through the window you can see a big brick oven, stone cold.', 'A bakery with no fire... if only something could make that oven burn again, for good.']) } },
   { id: 'home1',    map: 'village', tx: 14, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Bramble Cottage', wall: '#e8dcc0', roof: '#6a8a5a', vines: true },
-    act: () => F('home1Open') ? { label: 'Look at Bramble Cottage', fn: () => G.say(['Bramble Cottage. The squirrel family has made it cozy already.']) }
+    act: () => F('home1Open') ? { label: 'Look at Bramble Cottage', fn: () => G.say(['Bramble Cottage. The squirrel family has made it cozy already. Little faces keep popping up at the windows.']) }
       : G.has('machete') ? { label: 'Cut away the vines', fn: () => G.openHome1() }
       : { label: 'Look at the cottage', fn: () => G.say(['A pretty cottage, its door completely buried in thick, hexed vines.', 'You\'d need a sharp blade to cut through.']) } },
   { id: 'leather',  map: 'village', tx: 23, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Leather Goods', wall: '#dccab0', roof: '#7a5a3a', sign: '👜' },
@@ -572,9 +572,7 @@ const RESIDENTS = [
   { id: 'rosie',  map: 'village', x: 11, y: 12.6, species: 'bunny', when: () => G.flag('bakeryLit') },
   { id: 'rosie2', map: 'village', x: 12.4, y: 12.9, species: 'bunny', when: () => G.flag('bakeryLit') },
   { id: 'bruno',  map: 'village', x: 11, y: 19.8, species: 'badger', when: () => G.flag('smithyLit') },
-  { id: 'sq1',    map: 'village', x: 15.6, y: 12.6, species: 'squirrel', when: () => G.flag('home1Open') },
-  { id: 'sq2',    map: 'village', x: 17,   y: 12.9, species: 'squirrel', when: () => G.flag('home1Open') },
-  ...[0, 1, 2, 3, 4, 5].map(i => ({ id: 'ch' + i, map: 'village', x: 14.6 + (i % 3) * 1.1, y: 19.6 + Math.floor(i / 3) * 0.9, species: 'chipmunk', when: () => G.flag('home2Open') })),
+  // squirrels and chipmunks live INSIDE their cottages now (they peek out of the windows)
   ...[['#5b8fe0', 7.8], ['#e0574f', 8.6], ['#f0c43a', 7.2]].map(([c, x], i) => ({ id: 'bird' + i, map: 'village', x, y: 5.3 + i * 0.15, species: 'bird', color: c, when: () => G.flag('chainBird') })),
 ];
 
