@@ -351,6 +351,53 @@ v7 FIX (Nov 14): goose quills ran out (only 3 existed; 4+ Writes need 4+).
   Quills now always turn up by the brook (far bank) and by the Willow Bend
   pond when you have fewer than 2. Fennel now puts the ingredients for the
   spell you're working on ahead of other hints.
+THE KEEP, THE QUARRY, AND NEW SPELLS (Todd's notes, Nov 16 - design draft)
+------------------------------------------------------------------------
+THE KEEP: two screens south of the v6 land, behind brambles and hexes to be
+unblocked and unlocked. 5 levels:
+  Ground: entrance/lobby. Ballroom-size room to the right. Dining room to
+    the left, kitchen further back on the left (dining + kitchen together =
+    the ballroom's size, split in half). Lobby opens to ballroom and dining;
+    no hallway straight to the kitchen. Straight ahead: a large staircase,
+    UP on the right, DOWN on the left (each side tappable, direction shown).
+  Down 1: storage.  Down 2: a small dungeon/prison cell area and a weaponry
+    room.
+  Up 1: large living room over the dining room; a cozy study over the
+    kitchen (with a closet taking some of its space; maybe the study is
+    more of a library). Conservatory over the ballroom.
+  Up 2: bedrooms (4 or 6) off a central front-to-back hallway; at the end,
+    opposite the access stairs, stairs to the roof.
+  ROOF: the view zooms way out to an overview of the land around the keep
+    (ground features drawn small). Little or no walking; a way back down.
+    New spells are used from here.
+
+NEW SPELLS:
+  FARSIGHT (orb): touch a spot on the roof overview and see that actual
+    ground area up close, e.g. to find the route into a hidden glen.
+  LOCATE (orb or powder, open): set a marker on the overview. Back on the
+    ground, a soft glowing arrow or small foggy spot points toward it across
+    screens (you may still need to clear thistles, logs, broken bridges).
+    Going more than 2 screens past the Keep in another direction dissipates
+    the fog until you return to the Keep; if the marker isn't found, the fog
+    comes back and keeps guiding. Reaching the marker (walking through it or
+    very close, it may sit on a tree or rock) clears it; then it can be
+    recast.
+  CARRY / HAUL: choose an item and it floats behind you until you tap it and
+    choose Dismiss; it's set down in the right place. First use: moving the
+    Keep's books to the Owl's Library. Later: wood, special stone, statues.
+
+THE QUARRY: from the Keep, heading away from town. Four screens, each with a
+  different ore: COPPER, MARBLE, TIN, and a fourth area, locked until we
+  decide its material and use.
+  Copper + tin -> BRONZE and a new set of craftable items.
+  Marble -> finer decorations and permanent builds (e.g. a bridge that
+  doesn't keep falling apart and needing mending).
+  Tools: copper and tin from a basic pickaxe we build; then a bronze pick,
+  enchanted, strong enough for marble.
+  (Copper also unlocks Bruno's orb rings.)
+
+STILL TO DISCUSS: the library in town and the other shops.
+
 
 NEEDS DESIGN NEXT (Todd to journal):
   - The old keep and its copper quarry (orb rings).
