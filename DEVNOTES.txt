@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v7 (Nov 14, 2026)
+Current version: v8 (Nov 16, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -446,6 +446,34 @@ CRAFTING SUPPLIES: door puzzle, also 6x6: a picture of interconnected rings
   have more. Today, I only have X." (X and its price: open.)
 
 CLOTHIER: later.
+Todd's answers (Nov 16): owl runs the library, walk-in interior like the
+  hut. LATER: the owl identifies strange found items (their probable use,
+  not magic). Fennel detects magic: ask her to enchant a strange thing
+  (costs kindness) and she says she can't add any more magic to it.
+  More shelves get built once the Keep opens.
+
+v8 BUILT (Nov 16):
+  - OWL'S LIBRARY: 6x6 swap puzzle on the door (lamp over an open book; a
+    small preview of the finished picture is shown). Solved -> library
+    opens; walk inside (new interior map). AMBROSE the owl at his desk.
+    4 shelves, one book each: SYMBOLS (6 symbols: Looping Knot = hut rune,
+    Watching Stone = standing stones, Three Waves, The Unwinding, The
+    Branch, Moon and Seed; meanings unknown), VEGETATION (inkberry,
+    strawberry, apple, shimmer flower, pine, tinder fungus, Pale
+    Star-Flower: "little is known"), CREATURES OF HEXWOOD (fills in as you
+    meet them), OLD MOSS (lore: Moss walked south to the Keep the night of
+    the hex and never came back). First visit to a shelf: "Look" -> Yes/No;
+    after that "Read <book>". Closing: "You put the book back on the shelf."
+  - PAPER WORKSHOP: Kindle its drying stove -> MARIGOLD the goose (she's the
+    source of the quills). Trades: 2 bark -> 3 paper; 3 inkberries -> 2
+    berry ink; 6 paper + 1 honey + 2 spider silk -> Blank Book (waits for
+    the Discovery spell).
+  - CRAFTING SUPPLIES: 6x6 rings-and-rods rotation puzzle on the door ->
+    door opens, shop looks empty -> cast the SEEKER inside -> TILLY the
+    mouse appears (hexed invisible). Flustered; today she only has glass
+    jars (2 apples).
+  - BEE TREE in Willow Bend: with a jar, collect honey (Fennel treat, book
+    binding).
 
 
 NEEDS DESIGN NEXT (Todd to journal):

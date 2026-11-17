@@ -32,6 +32,7 @@ function addMap(id, rows, dark) {
 }
 addMap('hut', HUT_MAP);
 addMap('cellar', CELLAR_MAP);
+addMap('library', LIB_MAP);
 addMap('out', buildOutdoor());
 addMap('road', buildRoad());
 addMap('village', buildVillage());
@@ -44,7 +45,8 @@ function newState() {
   return {
     ver: 1, map: 'hut', px: 3.5, py: 3.5, dir: 1,
     flags: {}, inv: {}, pouch: [], pages: {}, late: {}, revealed: {}, lanterns: {}, freed: {},
-    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1, v_mill: 1, v_leather: 1, westbank: 1 },
+    zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1, v_mill: 1, v_leather: 1, westbank: 1, library: 0, v_library: 1, v_paper: 1, v_crafts: 1 },
+    booksSeen: {}, puz: {},
     cut: {}, visited: {},
     clues: [], curios: {}, gifts: {}, maxCharge: 3, time: 0,
   };
@@ -124,6 +126,12 @@ const G = {
     notice(`${it.icon} You found a curio: ${it.name}! ${it.desc}`, 'journal');
   },
   burstAt(x, y, c) { burst(x, y, c, 24); },
+  openPuzzle(k) { openPuzzle(k); },
+  shelfAct(b) {
+    const t = BOOKS[b].title;
+    if (!S.booksSeen[b]) return { label: 'Look', fn: () => choice(`The ${t} book looks interesting here. Do you want to read it?`, ['Yes', 'No'], i => { S.booksSeen[b] = true; save(); if (i === 0) openBook(b); }) };
+    return { label: `Read ${t}`, fn: () => openBook(b) };
+  },
   webAct: () => G.count('silk') < 3 ? { label: 'Gather spider silk', fn: () => { G.give('silk'); } } : { label: 'Look at the web', fn: () => say(['An old, empty web, glittering with dew.']) },
   buildBridge() {
     G.take('planks', 4); G.take('nails', 4); S.flags.bridgeBuilt = true; save(); chime(2); burst(6, 13.5, '#d8b88a', 24);
@@ -167,7 +175,7 @@ const G = {
 };
 
 // ================================================================ zones
-function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank); }
+function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank, ZONES.library); }
 function zoneAt(map, x, y) {
   const list = ZONES[map];
   for (const z of list) { const r = z.rect; if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return z; }
@@ -541,6 +549,11 @@ function kindleBuilding(o) {
     say(['The cube flares in your hand and leaps into the oven. The bricks glow orange, and the fire settles in to stay.',
       'Warm bread smell drifts down the street... and two rabbits hop in from the meadow, tying on aprons as they settle in by the bakery door.',
       'ROSIE: Oh! An oven that never goes cold! Come in, come in. Bring me ingredients and I\'ll bake you something lovely.']);
+  } else if (o.id === 'paper') {
+    G.setZone('v_paper', 0); spawnCreatures();
+    say(['The cube settles into the little drying stove, and warm, dry air rolls through the workshop. The limp sheets on the racks crisp up at once.',
+      'A large white goose marches up the street, honking importantly.',
+      'MARIGOLD: Finally! Warm air! Do you know how long it takes paper to dry in a hex? Forever, that\'s how long. Come in, come in. We trade here.']);
   } else if (o.id === 'smithy') {
     G.setZone('v_smithy', 0); spawnCreatures();
     say(['The cube flies into the forge with a roar. White-hot coals bloom and settle into a steady, endless glow.',
@@ -566,6 +579,8 @@ function mendThing(o) {
   }
 }
 function visitShop(st) {
+  if (st === 'paper') { choice('MARIGOLD: Honk! What can I do for you?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['MARIGOLD: Two bits of dry bark makes three good sheets of paper. Three inkberries, and I\'ll bottle you some proper ink.', 'MARIGOLD: Six sheets, a dab of honey and two strands of spider silk, and I\'ll bind you a book. What you\'ll fill it with, I couldn\'t say. Something magic, no doubt.', 'MARIGOLD: And yes, those are my quills down by the brook. I molt. It happens.']); else if (i === 1) openStation('paper'); }); return; }
+  if (st === 'crafts') { choice('TILLY: Oh! Oh my, a customer! Hello!', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['TILLY: Just getting started here. Just opened the shop. Not much available yet, but come back soon and I\'ll have more!', 'TILLY: Today, I only have glass jars. Two apples for one? Lovely for honey, if you can find a bee tree.']); else if (i === 1) openStation('crafts'); }); return; }
   if (st === 'mill') { choice('BARNABY: Hullo! Mind the flour dust.', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['BARNABY: The mill grinds on its own, but I get hungry. Bring me one of Rosie\'s strawberry shortcakes and I\'ll give you three sacks of flour.', 'BARNABY: And for an apple turnover I\'ll cut you a bundle of planks. I\'m very good with wood.']); else if (i === 1) openStation('mill'); }); return; }
   if (st === 'leather') { choice('RUFUS: Good day. Looking for something fine?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['RUFUS: Tinder fungus grows on dead trees. Bring me three and one of Rosie\'s berry tarts, and I\'ll make you a proper leather spell pouch. Holds nine.']); else if (i === 1) openStation('leather'); }); return; }
   const talk = {
@@ -605,6 +620,11 @@ function finishSeeker() {
     if (d <= 3.6) { S.revealed[o.id] = true; found.push(o); burst(o.tx + 0.5, o.ty + 0.5, '#bfe9ff', 26); }
   });
   rebuildSolids();
+  if (S.map === 'village' && G.flag('craftsDoor') && !G.flag('craftsOpen') && Math.hypot(S.px - 30, S.py - 10.5) < 4) {
+    S.flags.craftsOpen = true; G.setZone('v_crafts', 0); spawnCreatures(); chime(4); burst(30.4, 12.4, '#fff6c8', 30);
+    setTimeout(() => say(['The Seeker\'s light sweeps through the shop... and there, on the counter, a little mouse flickers into view, wringing her paws.',
+      'TILLY: Oh! You can see me! The hex made me invisible, and I\'ve been shouting for ages! Thank you, thank you!', 'TILLY: I\'m Tilly. This is my shop. Well, it will be, once it has things in it.']), 600);
+  }
   const first = revealPage('seeker');
   if (found.some(o => o.id === 'hollowgate')) { chime(3); notice('🔮 The hedge was only pretending! A narrow gap opens between the leaves.'); }
   else if (found.length) { chime(3); toast('🔮 Something hidden is revealed!', 3000); }
@@ -760,7 +780,7 @@ function smartHint() {
   // the road to town and the village
   if (F('doorOpen') && !S.visited.road) T.push({ map: 'out', x: 0.5, y: 17.5, text: `There's a path west from the yard. The old road leads to ${VILLAGE_NAME}. It's hexed too, poor thing.` });
   if (pg.kindle) {
-    const need = ['bakeryLit', 'smithyLit'].filter(k => !F(k)).length;
+    const need = ['bakeryLit', 'smithyLit', 'paperLit'].filter(k => !F(k)).length;
     const have = S.pouch.filter(p => p.type === 'kindlecube').length + G.count('embercube');
     if (need > have) {
       if (has('embercube')) now('Bring me the Ember Cube and choose "Enchant".');
@@ -773,6 +793,7 @@ function smartHint() {
     if (S.pouch.some(p => p.type === 'kindlecube')) {
       if (!F('bakeryLit')) at('bakery', 'The bakery oven in town is stone cold. Stand beside the bakery and cast your Kindle Cube.');
       if (!F('smithyLit')) at('smithy', 'The smithy\'s forge is cold. Stand beside it and cast a Kindle Cube.');
+      if (!F('paperLit')) at('paper', 'The paper workshop needs warm, dry air. Its stove would love a Kindle Cube.');
     }
   }
   if (S.visited.village && !F('home2Open')) at('home2', 'One cottage in town has windows so dark they swallow light. Your Light Orb might chase that out.');
@@ -812,6 +833,12 @@ function smartHint() {
   // never point at places you can't reach yet
   const reachable = (m) => m === null || m !== 'westbank' || F('bridgeMended');
   for (let i = T.length - 1; i >= 0; i--) if (!reachable(T[i].map)) T.splice(i, 1);
+  if (S.visited.village && !F('libOpen')) at('library', 'The Owl\'s Library door has a picture puzzle on it. Swap the little squares until the picture is whole.');
+  if (S.visited.village && !F('craftsDoor')) at('crafts', 'The craft shop\'s lock is a puzzle of rings and rods. Turn the tiles until every line connects.');
+  if (F('craftsDoor') && !F('craftsOpen')) at('crafts', S.pouch.some(p => p.type === 'seekerorb') ? 'Someone is in that craft shop, I can feel it. Use your Seeker Orb in there.' : 'Someone invisible is in the craft shop. A Seeker Orb would find them.');
+  if (F('craftsOpen') && !has('jar')) at('crafts', 'Tilly trades glass jars for apples.');
+  if (has('jar') && !has('honey') && F('bridgeMended')) at('beetree', 'There\'s a bee tree in Willow Bend. With a jar, you could collect honey.');
+  if (F('libOpen') && Object.keys(S.booksSeen).length < 4) at('shelf1', 'Have you looked at the books in the Owl\'s Library?');
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
   const dist = (t) => (t.pri ? -100 : 0) + (t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y));
@@ -1020,7 +1047,10 @@ function toast(text, ms = 2200, cls) {
 
 // ================================================================ panels
 function panelOpen() { return $('panel').classList.contains('show'); }
-function closePanel() { $('panel').classList.remove('show'); }
+function closePanel() {
+  $('panel').classList.remove('show');
+  if (reading) { reading = null; toast('📚 You put the book back on the shelf.', 2500); }
+}
 $('pclose').addEventListener('click', e => { e.stopPropagation(); closePanel(); });
 $('panel').addEventListener('pointerdown', e => e.stopPropagation());
 document.querySelectorAll('#topbar button').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); audioInit(); if (!dlg.open) openPanel(b.dataset.p); }));
@@ -1095,7 +1125,7 @@ function openPanel(kind) {
 function openStation(st, backTo) {
   const list = RECIPES.filter(r => r.station === st && (r.page ? S.pages[r.page] : (!r.req || r.req())));
   let html = '';
-  if (['bakery', 'smithy', 'mill', 'leather'].includes(st) && !list.length) html += '<p class="muted">Nothing to trade right now.</p>';
+  if (['bakery', 'smithy', 'mill', 'leather', 'paper', 'crafts'].includes(st) && !list.length) html += '<p class="muted">Nothing to trade right now.</p>';
   if (!list.length) html += '<p class="muted">Nothing you know how to make here yet.</p>';
   list.forEach(r => {
     const ok = Object.keys(r.needs).every(k => G.has(k, r.needs[k]));
@@ -1116,7 +1146,7 @@ function openStation(st, backTo) {
   const pages = [...new Set(list.map(r => r.page).filter(Boolean))];
   if (pages.length) html += '<h3>📖 From your Spellbook</h3>' + pages.map(p => pageHtml(p, PAGE_ORDER.indexOf(p), true)).join('');
   if (backTo) html = `<button class="side back" data-back="1">← Back to the ${STATION_NAMES[backTo]}</button>` + html;
-  $('ptitle').textContent = ({ fairy: '🧚 ', mortar: '🥣 ', bench: '🔨 ', bakery: '🍞 ', smithy: '⚒️ ', mill: '🌾 ', leather: '👜 ' }[st]) + STATION_NAMES[st];
+  $('ptitle').textContent = ({ fairy: '🧚 ', mortar: '🥣 ', bench: '🔨 ', bakery: '🍞 ', smithy: '⚒️ ', mill: '🌾 ', leather: '👜 ', paper: '📜 ', crafts: '✂️ ' }[st]) + STATION_NAMES[st];
   $('pbody').innerHTML = html;
   $('pbody').scrollTop = 0;
   $('pbody').querySelectorAll('[data-make]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); make(b.dataset.make, backTo); }));
@@ -1150,9 +1180,9 @@ function make(id, backTo) {
   if (r.station === 'fairy') S.favor--;
   if (S.map === 'hut') burst(S.px, S.py - 0.5, '#fff3b0', 12);
   if (r.makes === 'machete') { G.give('machete'); S.flags.macheteGot = true; save(); closePanel(); chime(3); say(['Bruno hammers, quenches, and polishes. He hands you a fine machete with a bark-wrapped grip.', 'BRUNO: For vines and brambles. Not fingers.', '(You can cut thickets, vines and weeds now.)']); return; }
-  if (r.station === 'smithy' || r.station === 'mill' || r.station === 'leather') {
+  if (['smithy', 'mill', 'leather', 'paper', 'crafts'].includes(r.station)) {
     G.give(r.makes, r.n || 1); closePanel(); chime(2);
-    say([{ smithy: 'Bruno hammers away at the anvil, sparks flying.', mill: 'Barnaby bustles off and comes back with his paws full.', leather: 'Rufus gets to work.' }[r.station], `You get ${ITEMS[r.makes].name}${r.n ? ' ×' + r.n : ''}.`]);
+    say([{ smithy: 'Bruno hammers away at the anvil, sparks flying.', mill: 'Barnaby bustles off and comes back with his paws full.', leather: 'Rufus gets to work.', paper: 'Marigold honks, flaps, and bustles about the racks.', crafts: 'Tilly scurries up a shelf and comes back down with it, beaming.' }[r.station], `You get ${ITEMS[r.makes].name}${r.n ? ' ×' + r.n : ''}.`]);
     return;
   }
   if (r.station === 'bakery') { G.give(r.makes); closePanel(); chime(2); say([`Rosie bustles about, and soon hands you a warm ${ITEMS[r.makes].name}.`, 'ROSIE: Fresh from the oven! It never goes cold now, you know.']); return; }
@@ -1171,6 +1201,160 @@ function make(id, backTo) {
   say(r.station === 'fairy'
     ? ['Fennel circles it three times, trailing fairy dust. It begins to glow from the inside.', `${d.icon} You put ${nm} in your Spell Pouch.`]
     : [`You work everything together on the bench into ${nm}.`, `${d.icon} It goes into your Spell Pouch. Open the Pouch to cast it.`]);
+}
+
+// ---------------------------------------------------------------- door puzzles (6x6)
+const PZ = { cell: 0, sel: -1, kind: null };
+function puzzleCanvasSize() { return Math.min(342, Math.floor(($('panel').clientWidth || 360) - 40)); }
+function makeLampPicture(N) {
+  const c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d');
+  const bg = x.createRadialGradient(N * 0.5, N * 0.35, N * 0.05, N * 0.5, N * 0.5, N * 0.75);
+  bg.addColorStop(0, '#fff2c8'); bg.addColorStop(0.5, '#e8c890'); bg.addColorStop(1, '#6a4a6a'); x.fillStyle = bg; x.fillRect(0, 0, N, N);
+  x.strokeStyle = 'rgba(255,240,190,0.35)'; x.lineWidth = N * 0.012; for (let i = 0; i < 14; i++) { const a = i / 14 * Math.PI * 2; x.beginPath(); x.moveTo(N * 0.5, N * 0.3); x.lineTo(N * 0.5 + Math.cos(a) * N, N * 0.3 + Math.sin(a) * N); x.stroke(); }
+  x.strokeStyle = '#5b3a5a'; x.lineWidth = N * 0.025; x.strokeRect(N * 0.03, N * 0.03, N * 0.94, N * 0.94);
+  [[0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]].forEach(([a, b]) => { x.fillStyle = '#c99a3e'; x.beginPath(); x.arc(N * a, N * b, N * 0.03, 0, 7); x.fill(); });
+  // open book
+  x.fillStyle = '#7a3a3a'; x.beginPath(); x.moveTo(N * 0.12, N * 0.86); x.lineTo(N * 0.88, N * 0.86); x.lineTo(N * 0.84, N * 0.62); x.lineTo(N * 0.16, N * 0.62); x.fill();
+  const pageL = x.createLinearGradient(N * 0.15, 0, N * 0.5, 0); pageL.addColorStop(0, '#e8dcc0'); pageL.addColorStop(1, '#fffaf0');
+  x.fillStyle = pageL; x.beginPath(); x.moveTo(N * 0.5, N * 0.84); x.quadraticCurveTo(N * 0.33, N * 0.8, N * 0.15, N * 0.83); x.lineTo(N * 0.19, N * 0.6); x.quadraticCurveTo(N * 0.35, N * 0.57, N * 0.5, N * 0.62); x.fill();
+  const pageR = x.createLinearGradient(N * 0.5, 0, N * 0.85, 0); pageR.addColorStop(0, '#fffaf0'); pageR.addColorStop(1, '#e0d2b4');
+  x.fillStyle = pageR; x.beginPath(); x.moveTo(N * 0.5, N * 0.84); x.quadraticCurveTo(N * 0.67, N * 0.8, N * 0.85, N * 0.83); x.lineTo(N * 0.81, N * 0.6); x.quadraticCurveTo(N * 0.65, N * 0.57, N * 0.5, N * 0.62); x.fill();
+  x.strokeStyle = 'rgba(80,60,40,0.5)'; x.lineWidth = N * 0.005; for (let i = 0; i < 6; i++) { const yy = N * (0.65 + i * 0.03); x.beginPath(); x.moveTo(N * 0.22, yy); x.lineTo(N * 0.46, yy + N * 0.005); x.stroke(); x.beginPath(); x.moveTo(N * 0.54, yy + N * 0.005); x.lineTo(N * 0.78, yy); x.stroke(); }
+  // oil lamp
+  x.fillStyle = '#b8862a'; x.beginPath(); x.ellipse(N * 0.5, N * 0.58, N * 0.13, N * 0.03, 0, 0, 7); x.fill();
+  const body = x.createLinearGradient(N * 0.38, 0, N * 0.62, 0); body.addColorStop(0, '#8a5a1a'); body.addColorStop(0.4, '#e8b84a'); body.addColorStop(1, '#7a4a12');
+  x.fillStyle = body; x.beginPath(); x.ellipse(N * 0.5, N * 0.5, N * 0.11, N * 0.08, 0, 0, 7); x.fill();
+  x.fillRect(N * 0.47, N * 0.52, N * 0.06, N * 0.06);
+  x.strokeStyle = '#8a5a1a'; x.lineWidth = N * 0.018; x.beginPath(); x.arc(N * 0.64, N * 0.5, N * 0.04, -1.2, 1.4); x.stroke();
+  x.fillStyle = '#6a4212'; x.fillRect(N * 0.45, N * 0.41, N * 0.1, N * 0.03);
+  const glass = x.createLinearGradient(N * 0.43, 0, N * 0.57, 0); glass.addColorStop(0, 'rgba(220,240,250,0.55)'); glass.addColorStop(0.5, 'rgba(255,255,255,0.85)'); glass.addColorStop(1, 'rgba(200,225,240,0.55)');
+  x.fillStyle = glass; x.beginPath(); x.moveTo(N * 0.45, N * 0.41); x.quadraticCurveTo(N * 0.4, N * 0.33, N * 0.45, N * 0.24); x.lineTo(N * 0.55, N * 0.24); x.quadraticCurveTo(N * 0.6, N * 0.33, N * 0.55, N * 0.41); x.fill();
+  const fl = x.createRadialGradient(N * 0.5, N * 0.33, 0, N * 0.5, N * 0.33, N * 0.06); fl.addColorStop(0, '#fff8d0'); fl.addColorStop(0.5, '#ffb840'); fl.addColorStop(1, 'rgba(255,140,40,0)');
+  x.fillStyle = fl; x.beginPath(); x.ellipse(N * 0.5, N * 0.33, N * 0.03, N * 0.055, 0, 0, 7); x.fill();
+  x.fillStyle = '#6a4212'; x.fillRect(N * 0.46, N * 0.22, N * 0.08, N * 0.02);
+  return c;
+}
+function openPuzzle(kind) {
+  PZ.kind = kind; PZ.sel = -1;
+  if (kind === 'swap' && !S.puz.swap) {
+    const R = rng(Date.now() & 0xffff), a = [...Array(36).keys()];
+    do { for (let i = 35; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } } while (a.filter((v, i) => v === i).length > 3);
+    S.puz.swap = a; save();
+  }
+  if (kind === 'pipes' && !S.puz.pipes) { S.puz.pipes = makePipes(); save(); }
+  const N = puzzleCanvasSize();
+  $('ptitle').textContent = kind === 'swap' ? '📚 The Library Door' : '✂️ The Craft Shop Door';
+  $('pbody').innerHTML = `<p class="muted small">${kind === 'swap' ? 'Tap a square, then tap another: they swap places. Make the picture whole.' : 'Tap a tile to turn it a quarter turn. Connect every rod so there are no loose ends.'}</p>` +
+    `<canvas id="pzc" width="${N * DPR}" height="${N * DPR}" style="width:${N}px;height:${N}px;display:block;margin:8px auto;border-radius:8px;touch-action:none"></canvas>` +
+    '<button class="wide" id="pzdone">Step back</button>';
+  const c = $('pzc'); PZ.cell = N / 6; PZ.N = N;
+  if (kind === 'swap') {
+    PZ.pic = makeLampPicture(N * DPR);
+    const prev = document.createElement('div'); prev.className = 'muted small'; prev.style.textAlign = 'center';
+    prev.innerHTML = `The finished picture:<br><img src="${PZ.pic.toDataURL()}" style="width:96px;height:96px;border-radius:6px;margin-top:4px">`;
+    $('pzdone').before(prev);
+  }
+  c.addEventListener('click', e => { e.stopPropagation(); const r = c.getBoundingClientRect(); puzzleTap(Math.floor((e.clientX - r.left) / PZ.cell), Math.floor((e.clientY - r.top) / PZ.cell)); });
+  $('pzdone').addEventListener('click', e => { e.stopPropagation(); closePanel(); });
+  $('panel').classList.add('show');
+  drawPuzzle();
+}
+function puzzleTap(cx, cy) {
+  if (cx < 0 || cy < 0 || cx > 5 || cy > 5) return;
+  const i = cy * 6 + cx;
+  if (PZ.kind === 'swap') {
+    if (PZ.sel < 0) { PZ.sel = i; blip(900); }
+    else { const a = S.puz.swap; [a[PZ.sel], a[i]] = [a[i], a[PZ.sel]]; PZ.sel = -1; blip(1200); save(); }
+  } else { S.puz.pipes.r[i] = (S.puz.pipes.r[i] + 1) % 4; blip(700 + (i % 6) * 60); save(); }
+  drawPuzzle();
+  if (puzzleSolved()) setTimeout(puzzleWin, 400);
+}
+function puzzleSolved() {
+  if (PZ.kind === 'swap') return S.puz.swap.every((v, i) => v === i);
+  const P = S.puz.pipes, m = (i) => rotMask(P.conn[i], P.r[i]);
+  for (let i = 0; i < 36; i++) {
+    const x = i % 6, y = (i / 6) | 0, k = m(i);
+    if ((k & 1) && (y === 0 || !(m(i - 6) & 4))) return false;
+    if ((k & 2) && (x === 5 || !(m(i + 1) & 8))) return false;
+    if ((k & 4) && (y === 5 || !(m(i + 6) & 1))) return false;
+    if ((k & 8) && (x === 0 || !(m(i - 1) & 2))) return false;
+  }
+  const seen = new Set([0]), q = [0];
+  while (q.length) { const i = q.pop(), k = m(i); [[1, -6], [2, 1], [4, 6], [8, -1]].forEach(([b, d]) => { if (k & b && !seen.has(i + d)) { seen.add(i + d); q.push(i + d); } }); }
+  return seen.size === 36;
+}
+function puzzleWin() {
+  if (!panelOpen()) return;
+  closePanel(); chime(4);
+  if (PZ.kind === 'swap') {
+    S.flags.libOpen = true; G.setZone('v_library', 0); save(); burst(11, 5, '#fff3b0', 36);
+    say(['The last tile clicks into place. The picture glows, lamp and book together, and the hex around the library breaks like thin ice.',
+      'The door swings open. From somewhere inside comes a soft "Hoo?"']);
+  } else {
+    S.flags.craftsDoor = true; save(); burst(30, 12, '#e7c36a', 30);
+    say(['Every rod connects. The rings spin, the lock clicks, and the door creaks open.', 'Inside, the shop looks empty... but you hear tiny, worried squeaks.']);
+  }
+}
+function rotMask(k, r) { for (let i = 0; i < r; i++) k = ((k << 1) | (k >> 3)) & 15; return k; }
+function makePipes() {
+  const R = rng(Date.now() & 0xffff), conn = new Array(36).fill(0), seen = new Set([0]), stack = [0];
+  while (stack.length) {
+    const i = stack[stack.length - 1], x = i % 6, y = (i / 6) | 0;
+    const opts = [[1, 4, -6, y > 0], [2, 8, 1, x < 5], [4, 1, 6, y < 5], [8, 2, -1, x > 0]].filter(o => o[3] && !seen.has(i + o[2]));
+    if (!opts.length) { stack.pop(); continue; }
+    const [b, ob, d] = opts[Math.floor(R() * opts.length)];
+    conn[i] |= b; conn[i + d] |= ob; seen.add(i + d); stack.push(i + d);
+  }
+  const r = conn.map(() => R() < 0.08 ? 0 : 1 + Math.floor(R() * 3));
+  return { conn, r };
+}
+function drawPuzzle() {
+  const c = $('pzc'); if (!c) return;
+  const x = c.getContext('2d'), N = PZ.N, cs = N / 6;
+  x.setTransform(DPR, 0, 0, DPR, 0, 0); x.clearRect(0, 0, N, N);
+  if (PZ.kind === 'swap') {
+    const a = S.puz.swap, src = PZ.pic.width / 6;
+    for (let i = 0; i < 36; i++) {
+      const v = a[i], sx = (v % 6) * src, sy = ((v / 6) | 0) * src, dx = (i % 6) * cs, dy = ((i / 6) | 0) * cs;
+      x.drawImage(PZ.pic, sx, sy, src, src, dx, dy, cs, cs);
+      x.strokeStyle = 'rgba(60,40,30,0.35)'; x.lineWidth = 1; x.strokeRect(dx + 0.5, dy + 0.5, cs - 1, cs - 1);
+      if (i === PZ.sel) { x.strokeStyle = '#7b6fd6'; x.lineWidth = 4; x.strokeRect(dx + 2, dy + 2, cs - 4, cs - 4); }
+    }
+  } else {
+    const P = S.puz.pipes, solved = puzzleSolved();
+    for (let i = 0; i < 36; i++) {
+      const dx = (i % 6) * cs, dy = ((i / 6) | 0) * cs, k = rotMask(P.conn[i], P.r[i]);
+      const bg = x.createLinearGradient(dx, dy, dx + cs, dy + cs); bg.addColorStop(0, '#5a4a3a'); bg.addColorStop(1, '#3a2e26');
+      x.fillStyle = bg; x.fillRect(dx, dy, cs, cs); x.strokeStyle = 'rgba(0,0,0,0.4)'; x.strokeRect(dx + 0.5, dy + 0.5, cs - 1, cs - 1);
+      const cx = dx + cs / 2, cy = dy + cs / 2;
+      x.lineCap = 'round'; x.strokeStyle = solved ? '#ffe39a' : '#d8a84a'; x.lineWidth = cs * 0.14;
+      [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (k & b) { x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + ux * cs / 2, cy + uy * cs / 2); x.stroke(); } });
+      x.strokeStyle = '#f0d080'; x.lineWidth = cs * 0.045; [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (k & b) { x.beginPath(); x.moveTo(cx + ux * cs * 0.1, cy + uy * cs * 0.1); x.lineTo(cx + ux * cs / 2, cy + uy * cs / 2); x.stroke(); } });
+      const deg = [1, 2, 4, 8].filter(b => k & b).length;
+      x.strokeStyle = solved ? '#fff2b0' : '#e8c060'; x.lineWidth = cs * 0.07; x.beginPath(); x.arc(cx, cy, cs * (deg === 1 ? 0.2 : 0.13), 0, 7); x.stroke();
+      x.fillStyle = '#3a2e26'; x.beginPath(); x.arc(cx, cy, cs * (deg === 1 ? 0.15 : 0.08), 0, 7); x.fill();
+    }
+  }
+}
+
+// ---------------------------------------------------------------- reading library books
+let reading = null;
+function openBook(id) {
+  reading = { id, page: 0 };
+  renderBook();
+  $('panel').classList.add('show');
+}
+function renderBook() {
+  const b = BOOKS[reading.id], pages = b.pages(), n = pages.length;
+  reading.page = clamp(reading.page, 0, n - 1);
+  $('ptitle').textContent = '📕 ' + b.title;
+  $('pbody').innerHTML = `<div class="page bookpage">${pages[reading.page]}</div>` +
+    `<div class="booknav"><button id="bkprev" ${reading.page ? '' : 'disabled'}>‹ Back</button><span>${reading.page + 1} / ${n}</span><button id="bknext" ${reading.page < n - 1 ? '' : 'disabled'}>Next ›</button></div>` +
+    '<button class="wide" id="bkclose">Close the book</button>';
+  $('pbody').scrollTop = 0;
+  $('bkprev').addEventListener('click', e => { e.stopPropagation(); reading.page--; blip(900); renderBook(); });
+  $('bknext').addEventListener('click', e => { e.stopPropagation(); reading.page++; blip(1000); renderBook(); });
+  $('bkclose').addEventListener('click', e => { e.stopPropagation(); closePanel(); });
 }
 
 // ---------------------------------------------------------------- bureau dial puzzle
@@ -1824,7 +2008,7 @@ const DRAW = {
       ctx.fillStyle = C('#e8434f', g); ctx.beginPath(); ctx.moveTo(px - w * 0.05, py + h * 0.04); ctx.lineTo(px + w * 0.05, py + h * 0.04); ctx.lineTo(px, py + h * 0.15); ctx.closePath(); ctx.fill(); }
   },
   building(o, x, y, w, h, g, t) {
-    const b = o.b, lit = o.kindle ? G.flag(o.kindle) : o.mend ? G.flag(o.mend) : o.id === 'home1' ? G.flag('home1Open') : o.id === 'home2' ? G.flag('home2Open') : false;
+    const b = o.b, lit = o.kindle ? G.flag(o.kindle) : o.mend ? G.flag(o.mend) : o.lit ? G.flag(o.lit) : o.id === 'home1' ? G.flag('home1Open') : o.id === 'home2' ? G.flag('home2Open') : false;
     const gg = lit ? 0 : 1;
     ctx.fillStyle = 'rgba(30,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 4, w * 0.55, h * 0.14, 0, 0, 7); ctx.fill();
     const wg = ctx.createLinearGradient(x, 0, x + w, 0); wg.addColorStop(0, C(b.wall, gg)); wg.addColorStop(1, C('#b8a688', gg));
@@ -1880,6 +2064,39 @@ const DRAW = {
     if (G.flag('weedsCut')) { const n = 3; for (let i = 0; i < 6; i++) { ctx.fillStyle = C('#e2403f', g); circ(x + w * (0.1 + hash(i, 7) * 0.8), y - h * (0.6 + hash(i, 8) * 1.1), TS * 0.07); ctx.fill(); } }
     else { ctx.strokeStyle = C('#6a7a42', g); ctx.lineWidth = 2.5; for (let i = 0; i < 10; i++) { const sx0 = x + w * (0.1 + hash(i, 4) * 0.8); ctx.beginPath(); ctx.moveTo(sx0, y + h); ctx.bezierCurveTo(sx0 + 8, y + h * 0.3, sx0 - 10, y - h * 0.4, sx0 + 4, y - h * (0.6 + hash(i, 5) * 0.8)); ctx.stroke(); }
       ctx.fillStyle = C('#7a8a4a', g); for (let i = 0; i < 18; i++) { ctx.beginPath(); ctx.ellipse(x + w * hash(i, 6), y + h * (0.9 - hash(i, 9) * 2), 4, 2.5, i, 0, 7); ctx.fill(); } }
+  },
+  bookshelf(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#6a4a32', g); rr(x + 2, y - h * 0.6, w - 4, h * 1.55, 4); ctx.fill();
+    ctx.fillStyle = C('#4e3220', g); for (let r = 0; r < 3; r++) ctx.fillRect(x + 6, y - h * 0.5 + r * h * 0.48, w - 12, h * 0.4);
+    const cols = ['#a0566b', '#5b6aa8', '#4f9346', '#c99a3e', '#7a5a9a', '#3a8a8a', '#c4704a'];
+    for (let r = 0; r < 3; r++) { let bx = x + 8; let i = 0; while (bx < x + w - 12) { const bw = 5 + hash(bx, r + o.tx) * 6, bh = h * (0.28 + hash(r, bx) * 0.1); ctx.fillStyle = C(cols[(i + r + o.tx) % cols.length], g); ctx.fillRect(bx, y - h * 0.12 + r * h * 0.48 - bh, bw, bh); bx += bw + 1.5; i++; } }
+    if (!S.booksSeen[o.book]) { const k = 0.5 + 0.5 * Math.sin(Date.now() / 300); star(x + w * 0.8, y - h * 0.5, TS * 0.07 * (0.6 + k * 0.4), 'rgba(255,240,180,0.9)'); }
+  },
+  owldesk(o, x, y, w, h, g, t) {
+    // owl on a perch behind the desk
+    const ox = x + w / 2, oy = y - h * 0.15 + Math.sin(t * 1.2) * 1.5, s = TS;
+    ctx.fillStyle = '#8a6a4a'; ctx.beginPath(); ctx.ellipse(ox, oy, s * 0.26, s * 0.32, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#c9a882'; ctx.beginPath(); ctx.ellipse(ox, oy + s * 0.08, s * 0.16, s * 0.2, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#8a6a4a'; ctx.beginPath(); ctx.moveTo(ox - s * 0.24, oy - s * 0.2); ctx.lineTo(ox - s * 0.18, oy - s * 0.42); ctx.lineTo(ox - s * 0.08, oy - s * 0.26); ctx.fill(); ctx.beginPath(); ctx.moveTo(ox + s * 0.24, oy - s * 0.2); ctx.lineTo(ox + s * 0.18, oy - s * 0.42); ctx.lineTo(ox + s * 0.08, oy - s * 0.26); ctx.fill();
+    ctx.fillStyle = '#fff6e0'; circ(ox - s * 0.1, oy - s * 0.14, s * 0.09); ctx.fill(); circ(ox + s * 0.1, oy - s * 0.14, s * 0.09); ctx.fill();
+    const blink = (t % 4) < 0.15;
+    ctx.fillStyle = '#222'; if (!blink) { circ(ox - s * 0.1, oy - s * 0.14, s * 0.045); ctx.fill(); circ(ox + s * 0.1, oy - s * 0.14, s * 0.045); ctx.fill(); } else { ctx.fillRect(ox - s * 0.17, oy - s * 0.15, s * 0.34, 2); }
+    ctx.strokeStyle = '#c99a3e'; ctx.lineWidth = 1.5; circ(ox - s * 0.1, oy - s * 0.14, s * 0.1); ctx.stroke(); circ(ox + s * 0.1, oy - s * 0.14, s * 0.1); ctx.stroke();
+    ctx.fillStyle = '#e8a63a'; ctx.beginPath(); ctx.moveTo(ox - s * 0.03, oy - s * 0.06); ctx.lineTo(ox + s * 0.03, oy - s * 0.06); ctx.lineTo(ox, oy + s * 0.02); ctx.fill();
+    // desk
+    ctx.fillStyle = C('#7a543b', g); rr(x + 2, y + h * 0.15, w - 4, h * 0.8, 6); ctx.fill();
+    ctx.fillStyle = C('#9a6c42', g); rr(x + 4, y + h * 0.15, w - 8, h * 0.25, 4); ctx.fill();
+    ctx.fillStyle = '#f4efe2'; ctx.fillRect(x + w * 0.62, y + h * 0.05, w * 0.2, h * 0.16); ctx.fillStyle = '#e7c36a'; circ(x + w * 0.18, y + h * 0.12, s * 0.06); ctx.fill();
+  },
+  ldoor(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#cfe9b8', g); rr(x + w * 0.12, y + 2, w * 0.76, h - 2, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fillRect(x + w * 0.2, y + 6, w * 0.6, 3);
+  },
+  beetree(o, x, y, w, h, g, t) {
+    drawSprite('oak', 2, g, x + w / 2, y + h * 0.95, Math.sin(t * 0.8) * 0.02);
+    ctx.fillStyle = '#3a2416'; ctx.beginPath(); ctx.ellipse(x + w * 0.52, y + h * 0.15, w * 0.1, h * 0.14, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#e8b84a'; ctx.beginPath(); ctx.ellipse(x + w * 0.52, y + h * 0.2, w * 0.06, h * 0.06, 0, 0, 7); ctx.fill();
+    for (let i = 0; i < 4; i++) { const a = t * 3 + i * 1.6; const bx = x + w * 0.52 + Math.cos(a) * w * 0.35, by = y + h * 0.1 + Math.sin(a * 1.3) * h * 0.25; ctx.fillStyle = '#f0c43a'; circ(bx, by, 2.5); ctx.fill(); ctx.fillStyle = '#222'; ctx.fillRect(bx - 1, by - 2.5, 1.5, 5); }
   },
   web(o, x, y, w, h, g) {
     const cx = x + w / 2, cy = y + h * 0.35, r = w * 0.4;
@@ -2000,6 +2217,15 @@ function drawCreature(c, t) {
     ctx.beginPath(); ctx.moveTo(s * 0.07, -s * 0.12 - hop); ctx.lineTo(s * 0.09, -s * 0.2 - hop); ctx.lineTo(s * 0.12, -s * 0.13 - hop); ctx.fill();
     ctx.fillStyle = '#f3e2c8'; ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.08 - hop, s * 0.06, s * 0.05, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#222'; circ(s * 0.13, -s * 0.07 - hop, s * 0.016); ctx.fill();
+  } else if (sp === 'goose') {
+    const bob = Math.sin(c.t * 3) * s * 0.02;
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.24, s * 0.22, s * 0.06, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f6f4ee'; ctx.beginPath(); ctx.ellipse(-s * 0.02, s * 0.08, s * 0.22, s * 0.14, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#f6f4ee'; ctx.lineWidth = s * 0.08; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(s * 0.12, s * 0.02); ctx.quadraticCurveTo(s * 0.2, -s * 0.12, s * 0.14, -s * 0.24 + bob); ctx.stroke(); ctx.lineCap = 'butt';
+    ctx.fillStyle = '#f6f4ee'; circ(s * 0.15, -s * 0.26 + bob, s * 0.07); ctx.fill();
+    ctx.fillStyle = '#f0a030'; ctx.beginPath(); ctx.moveTo(s * 0.2, -s * 0.28 + bob); ctx.lineTo(s * 0.3, -s * 0.25 + bob); ctx.lineTo(s * 0.2, -s * 0.22 + bob); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.17, -s * 0.28 + bob, s * 0.015); ctx.fill();
+    ctx.fillStyle = '#e0dcd2'; ctx.beginPath(); ctx.ellipse(-s * 0.06, s * 0.05, s * 0.12, s * 0.07, -0.2, 0, 7); ctx.fill();
   } else if (sp === 'beaver') {
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.22, s * 0.24, s * 0.06, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#5a4030'; ctx.beginPath(); ctx.ellipse(-s * 0.22, s * 0.14, s * 0.12, s * 0.06, -0.2, 0, 7); ctx.fill();
@@ -2078,7 +2304,8 @@ function startGame(fresh) {
   // repair chain state from a save made mid-sequence
   if (S.flags.chainChip) { S.flags.chipsInHollow = true; if (!S.clues.find(c => c.id === 'chipmunks')) S.clues.push({ id: 'chipmunks', text: CLUES.chipmunks, done: false }); }
   S.given = S.given || {}; S.cut = S.cut || {}; S.visited = S.visited || {};
-  for (const z of allZones()) if (typeof S.zones[z.id] !== 'number') S.zones[z.id] = 1;
+  for (const z of allZones()) if (typeof S.zones[z.id] !== 'number') S.zones[z.id] = z.id === 'library' ? 0 : 1;
+  S.booksSeen = S.booksSeen || {}; S.puz = S.puz || {};
   if (S.gifts) { if (S.gifts.r1) S.given.honeycake = true; if (S.gifts.r2) S.given.dew = true; if (S.gifts.r3) S.given.button = true; }
   for (const k in S.zones) zoneDisp[k] = S.zones[k];
   rebuildSolids(); spawnCreatures();

@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v7';
+const VERSION = 'v8';
 const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
@@ -44,6 +44,9 @@ const ITEMS = {
   nails:      { name: 'Nails',         icon: '📌', kind: 'ingredient', desc: 'A handful of Bruno\'s iron nails.' },
   copper:     { name: 'Copper',        icon: '🟤', kind: 'ingredient', desc: 'Reddish metal from a far-off quarry.' },
   shortcake:  { name: 'Strawberry Shortcake', icon: '🍰', kind: 'trinket', desc: 'Rosie\'s best. Light, sweet and piled with berries.' },
+  jar:        { name: 'Glass Jar',     icon: '🫙', kind: 'tool',       desc: 'An empty jar with a cork. Good for collecting honey.' },
+  paper:      { name: 'Paper',         icon: '📄', kind: 'ingredient', desc: 'Fresh sheets from Marigold\'s workshop.' },
+  blankbook:  { name: 'Blank Book',    icon: '📓', kind: 'tool',       desc: 'A bound book of empty pages. Someday a spell will fill it.' },
   pearl:      { name: 'River Pearl',   icon: '🫧', kind: 'curio',      desc: 'A pearl with a faint rainbow inside, from the frogs\' island.' },
   moonpebble: { name: 'Moon Pebble',   icon: '🌙', kind: 'curio',      desc: 'A pale pebble that glows at night.' },
   goldacorn:  { name: 'Golden Acorn',  icon: '🌰', kind: 'curio',      desc: 'An acorn of real gold. The chipmunks\' treasure.' },
@@ -177,6 +180,10 @@ const RECIPES = [
   { id: 'nails',    station: 'smithy', req: () => G.flag('macheteGot'), needs: { ironstone: 1 }, makes: 'nails', n: 4, verb: 'Trade' },
   { id: 'band',     station: 'smithy', req: () => G.flag('macheteGot'), needs: { ironstone: 2, copper: 1 }, special: 'band', verb: 'Trade',
     label: 'Orb rings (an orb holds 6 charges)', icon: '💍', note: 'Needs copper. Copper comes from a quarry out past the old keep. You can\'t get there yet.' },
+  { id: 'paper',     station: 'paper', req: () => G.flag('paperLit'), needs: { bark: 2 }, makes: 'paper', n: 3, verb: 'Trade' },
+  { id: 'ink',       station: 'paper', req: () => G.flag('paperLit'), needs: { inkberry: 3 }, makes: 'berryink', n: 2, verb: 'Trade' },
+  { id: 'bind',      station: 'paper', req: () => G.flag('paperLit'), needs: { paper: 6, honey: 1, silk: 2 }, makes: 'blankbook', verb: 'Trade' },
+  { id: 'jar',       station: 'crafts', req: () => G.flag('craftsOpen') && !G.has('jar'), needs: { apple: 2 }, makes: 'jar', verb: 'Trade' },
   { id: 'mendpaste', station: 'bench', page: 'mend', needs: { resin: 1, silk: 1 }, makes: 'paste', verb: 'Join' },
   { id: 'mend',      station: 'fairy', page: 'mend', needs: { paste: 1 }, spell: 'mendpowder', verb: 'Enchant' },
   { id: 'shortcake', station: 'bakery', req: () => G.flag('bakeryLit') && G.flag('millMended'), needs: { flour: 1, strawberry: 2 }, makes: 'shortcake', verb: 'Trade' },
@@ -186,7 +193,7 @@ const RECIPES = [
     label: 'Leather spell pouch (holds 9 spells)', icon: '👝' },
 ];
 
-const STATION_NAMES = { mortar: 'Mortar & Pestle', bench: 'Workbench', fairy: 'Fennel the Fairy', bakery: 'Rosie\'s Bakery', smithy: 'Bruno\'s Smithy', mill: 'Barnaby\'s Mill', leather: 'Rufus\'s Leather Goods' };
+const STATION_NAMES = { mortar: 'Mortar & Pestle', bench: 'Workbench', fairy: 'Fennel the Fairy', bakery: 'Rosie\'s Bakery', smithy: 'Bruno\'s Smithy', mill: 'Barnaby\'s Mill', leather: 'Rufus\'s Leather Goods', paper: 'Marigold\'s Paper Workshop', crafts: 'Tilly\'s Crafting Supplies' };
 
 // ---------------------------------------------------------------- maps
 // Tile legend:
@@ -205,6 +212,18 @@ const HUT_MAP = [
   '#...........#',
   '#...........#',
   '######D######',
+];
+
+const LIB_MAP = [
+  '##w###w###w',
+  '#.........#',
+  '#.........#',
+  '#.........#',
+  '#.........#',
+  '#.........#',
+  '#.........#',
+  '#.........#',
+  '#####D#####',
 ];
 
 const CELLAR_MAP = [
@@ -408,6 +427,7 @@ const ZONES = {
     { id: 'brook',  name: 'Willow Brook',      rect: [0, 23, 39, 31] },
   ],
   road: [{ id: 'road', name: 'The Old Road', rect: [0, 0, 29, 19] }],
+  library: [{ id: 'library', name: 'Inside the Library', rect: [0, 0, 10, 8] }],
   westbank: [{ id: 'westbank', name: 'Willow Bend', rect: [0, 0, 29, 21] }],
   village: [
     { id: 'v_bakery', name: 'The Bakery',      rect: [8, 8, 13, 12] },
@@ -415,6 +435,9 @@ const ZONES = {
     { id: 'v_smithy', name: 'The Smithy',      rect: [8, 15, 13, 21] },
     { id: 'v_home2',  name: 'Lantern Cottage', rect: [14, 15, 18, 21] },
     { id: 'v_mill',   name: 'The Mill',        rect: [22, 15, 27, 21] },
+    { id: 'v_library', name: 'The Owl\'s Library', rect: [8, 1, 13, 5] },
+    { id: 'v_paper',  name: 'The Paper Workshop', rect: [14, 1, 18, 5] },
+    { id: 'v_crafts', name: 'Crafting Supplies', rect: [27, 8, 32, 12] },
     { id: 'v_leather', name: 'Leather Goods',  rect: [22, 8, 27, 12] },
     { id: 'village',  name: VILLAGE_NAME,      rect: [0, 0, 33, 27] },
   ],
@@ -562,9 +585,13 @@ const OBJECTS = [
 
   // ---------- Thistledown
   { id: 'library',  map: 'village', tx: 9,  ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Owl\'s Library', wall: '#d9cbb0', roof: '#5b6aa8', sign: '📚' },
-    act: () => ({ label: 'Look at the library', fn: () => G.say(['The Owl\'s Library. A great hex holds its doors shut. Through the gray glass you can see shelves and shelves of books.', 'Your magic isn\'t strong enough for this one... yet.']) }) },
+    lit: 'libOpen',
+    act: () => F('libOpen') ? { label: 'Enter the library', fn: () => G.goMap('library', 5.5, 7.4) }
+      : { label: 'Look at the library door', fn: () => G.say(['The Owl\'s Library. Set into the door is a square panel of little tiles, all jumbled up, like a picture that\'s been shuffled.'], () => G.openPuzzle('swap')) } },
   { id: 'paper',    map: 'village', tx: 14, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Paper Mill', wall: '#e3d6bd', roof: '#7a8a5a', sign: '📜' },
-    act: () => ({ label: 'Look at the workshop', fn: () => G.say(['A little workshop full of drying racks, the kind used for making paper. Hexed and silent.']) }) },
+    kindle: 'paperLit',
+    act: () => F('paperLit') ? { label: 'Visit the paper workshop', fn: () => G.visitShop('paper') }
+      : { label: 'Look at the workshop', fn: () => G.say(['A little workshop full of drying racks, the kind used for making paper. Its drying stove is cold, and everything inside is limp and damp.', 'Paper needs warm, dry air to cure.']) } },
   { id: 'clothier', map: 'village', tx: 23, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'The Clothier', wall: '#ecd9d9', roof: '#a85b7a', sign: '🧵' },
     act: () => ({ label: 'Look at the clothier', fn: () => G.say(['The Clothier. Bolts of fabric sit gray behind the window. A heavy hex holds the door.']) }) },
   { id: 'home3',    map: 'village', tx: 28, ty: 2,  tw: 4, th: 3, draw: 'building', b: { name: 'A cottage', wall: '#e2d4b6', roof: '#8a6a4a' },
@@ -581,7 +608,10 @@ const OBJECTS = [
     act: () => F('leatherMended') ? { label: 'Visit Leather Goods', fn: () => G.visitShop('leather') }
       : { label: 'Look at the shop', fn: () => G.say(['Leather Goods. The door hangs off one hinge and the window is cracked right across. Pouches and belts hang gray inside.', 'Something would need to mend it before anyone could work here.']) } },
   { id: 'crafts',   map: 'village', tx: 28, ty: 9,  tw: 4, th: 3, draw: 'building', b: { name: 'Crafting Supplies', wall: '#e6dcc8', roof: '#4a7a8a', sign: '✂️' },
-    act: () => ({ label: 'Look at the shop', fn: () => G.say(['Crafting Supplies. Jars of buttons, spools and beads, all gone gray. Hexed shut.']) }) },
+    lit: 'craftsOpen',
+    act: () => F('craftsOpen') ? { label: 'Visit Crafting Supplies', fn: () => G.visitShop('crafts') }
+      : F('craftsDoor') ? { label: 'Look inside', fn: () => G.say(['The door stands open, but the shop seems empty. Jars of buttons, spools and beads, all gray.', 'And yet... you hear tiny, worried squeaks. Something is in here that you can\'t see.']) }
+      : { label: 'Look at the shop door', fn: () => G.say(['Crafting Supplies. The door is locked by a panel of little brass tiles with rings and rods, all turned the wrong way.'], () => G.openPuzzle('pipes')) } },
   { id: 'smithy',   map: 'village', tx: 9,  ty: 16, tw: 4, th: 3, draw: 'building', kindle: 'smithyLit', b: { name: 'The Smithy', wall: '#b8b2a8', roof: '#5a5a66', sign: '⚒️', forge: true, stone: true },
     act: () => G.flag('smithyLit') ? { label: 'Visit the smithy', fn: () => G.visitShop('smithy') }
       : { label: 'Look at the smithy', fn: () => G.say(['The Smithy. The forge inside is cold and dark, and the anvil is thick with dust.', 'No smith would come to a forge without fire.']) } },
@@ -623,6 +653,23 @@ const OBJECTS = [
     act: () => ({ label: 'Take the feather', fn: () => { G.give('wisp'); G.setFlag('islandWisp'); G.islandCheck(); } }) },
   { id: 'islandpearl', map: 'westbank', tx: 15, ty: 11, solid: false, draw: 'pickup', icon: '🫧', vis: () => F('frogsSang') && !F('pearlTaken'),
     act: () => ({ label: 'Pick up the pearl', fn: () => { G.give('pearl'); G.setFlag('pearlTaken'); G.curio('pearl'); G.islandCheck(); } }) },
+
+  // ---------- inside the Owl's Library
+  { id: 'shelf1', map: 'library', tx: 1, ty: 1, tw: 2, draw: 'bookshelf', book: 'symbols',    act: () => G.shelfAct('symbols') },
+  { id: 'shelf2', map: 'library', tx: 8, ty: 1, tw: 2, draw: 'bookshelf', book: 'vegetation', act: () => G.shelfAct('vegetation') },
+  { id: 'shelf3', map: 'library', tx: 1, ty: 5, tw: 2, draw: 'bookshelf', book: 'creatures',  act: () => G.shelfAct('creatures') },
+  { id: 'shelf4', map: 'library', tx: 8, ty: 5, tw: 2, draw: 'bookshelf', book: 'moss',       act: () => G.shelfAct('moss') },
+  { id: 'owldesk', map: 'library', tx: 4, ty: 2, tw: 3, draw: 'owldesk',
+    act: () => ({ label: 'Talk to Ambrose', fn: () => G.say(['AMBROSE: Hoo! Welcome, welcome. You opened my door, and the hex simply... let go. I am in your debt.',
+      'AMBROSE: These four shelves are all that\'s left of a fine collection. Read whatever you like. Just put the books back.',
+      'AMBROSE: And if you ever find something strange out there, bring it to me. I can\'t tell you if it\'s magical. That\'s Fennel\'s gift. But I can usually tell you what it was for.']) }) },
+  { id: 'lrug', map: 'library', tx: 3, ty: 4, tw: 5, th: 2, solid: false, layer: 'floor', draw: 'rug', act: () => null },
+  { id: 'ldoor', map: 'library', tx: 5, ty: 8, layer: 'wall', draw: 'ldoor',
+    act: () => ({ label: 'Go outside', fn: () => G.goMap('village', 11, 5.6) }) },
+  // ---------- Willow Bend bee tree
+  { id: 'beetree', map: 'westbank', tx: 23, ty: 14, draw: 'beetree',
+    act: () => G.has('jar') ? (G.count('honey') < 2 ? { label: 'Collect honey', fn: () => { G.give('honey'); G.say(['You hold the jar under the hollow. The bees grumble but let you have some. Wildflower honey!']); } } : { label: 'Look at the bee tree', fn: () => G.say(['The bees are busy. You have all the honey you can carry for now.']) })
+      : { label: 'Look at the bee tree', fn: () => G.say(['Bees hum in and out of a hollow in the trunk. Golden honey glistens inside.', 'You\'d need a jar to collect any.']) } },
 
   // secrets (need the Seeker Orb)
   { id: 'moonpebble', map: 'out', tx: 28, ty: 5, solid: false, draw: 'pickup', icon: '🌙', secret: true, vis: () => !F('pebbleTaken'),
@@ -672,6 +719,8 @@ const RESIDENTS = [
   { id: 'rosie2', map: 'village', x: 12.4, y: 12.9, species: 'bunny', when: () => G.flag('bakeryLit') },
   { id: 'bruno',  map: 'village', x: 11, y: 19.8, species: 'badger', when: () => G.flag('smithyLit') },
   { id: 'barnaby', map: 'village', x: 26.6, y: 19.7, species: 'beaver', when: () => G.flag('millMended') },
+  { id: 'marigold', map: 'village', x: 16.6, y: 5.7, species: 'goose', when: () => G.flag('paperLit') },
+  { id: 'tilly',  map: 'village', x: 30.4, y: 12.7, species: 'mouse', when: () => G.flag('craftsOpen') },
   { id: 'rufus',  map: 'village', x: 26.4, y: 12.6, species: 'raccoon', when: () => G.flag('leatherMended') },
   // squirrels and chipmunks live INSIDE their cottages now (they peek out of the windows)
   ...[['#5b8fe0', 7.8], ['#e0574f', 8.6], ['#f0c43a', 7.2]].map(([c, x], i) => ({ id: 'bird' + i, map: 'village', x, y: 5.3 + i * 0.15, species: 'bird', color: c, when: () => G.flag('chainBird') })),
@@ -684,4 +733,65 @@ const CLUES = {
   frogs: 'Four voices in the reeds. When the frogs sing together, the pond remembers its old stepping stones.',
   birds: 'Three voices, one song. Beside the owl\'s silent door, the brambles hide what an old friend left behind. A sharp blade and a gentle hand.',
   chipmunks: 'Six small friends remember the way. Where three birches lean together in the dark grove, the hedge is only pretending. Look with a seeing eye.',
+};
+
+
+// ---------------------------------------------------------------- library books
+// Symbols are small SVG drawings (meanings to be discovered later).
+const SYM = {
+  knot:   '<path d="M50 18c18 0 22 26 4 34s-34-6-26-22 34-6 34 14-26 28-36 12 4-38 24-38z" fill="none" stroke="#5b4fb6" stroke-width="5"/><circle cx="50" cy="50" r="38" fill="none" stroke="#5b4fb6" stroke-width="4"/>',
+  eye:    '<circle cx="50" cy="40" r="16" fill="none" stroke="#2d7aa0" stroke-width="5"/><line x1="50" y1="56" x2="50" y2="86" stroke="#2d7aa0" stroke-width="5"/><line x1="38" y1="74" x2="62" y2="74" stroke="#2d7aa0" stroke-width="4"/>',
+  wave:   '<path d="M14 40q12-14 24 0t24 0t24 0M14 58q12-14 24 0t24 0t24 0M14 76q12-14 24 0t24 0t24 0" fill="none" stroke="#3a8a8a" stroke-width="5"/>',
+  spiral: '<path d="M50 50m0-4a4 4 0 1 1-4 4a10 10 0 1 1 10 10a18 18 0 1 1-18-18a26 26 0 1 1 26 26" fill="none" stroke="#a0566b" stroke-width="5"/>',
+  branch: '<line x1="50" y1="14" x2="50" y2="88" stroke="#4f7a3a" stroke-width="5"/><path d="M50 30l-16-12M50 30l16-12M50 50l-20-14M50 50l20-14M50 70l-16-12M50 70l16-12" stroke="#4f7a3a" stroke-width="4" fill="none"/>',
+  moon:   '<path d="M62 18a34 34 0 1 0 0 64a26 26 0 1 1 0-64z" fill="none" stroke="#b08a2a" stroke-width="5"/><circle cx="66" cy="50" r="5" fill="#b08a2a"/>',
+};
+const svg = (inner, w = 120) => `<svg viewBox="0 0 100 100" width="${w}" height="${w}" style="display:block;margin:6px auto">${inner}</svg>`;
+const PLANT = {
+  inkberry: '<ellipse cx="50" cy="80" rx="34" ry="10" fill="#3a3a2a" opacity=".25"/><path d="M50 82V40" stroke="#4a3a2a" stroke-width="4"/>' + [0, 60, 120, 180, 240, 300].map(a => `<ellipse cx="50" cy="38" rx="7" ry="20" fill="#1f3a2a" transform="rotate(${a} 50 50) translate(0 -8)"/>`).join('') + '<circle cx="44" cy="52" r="6" fill="#3e2f7a"/><circle cx="56" cy="54" r="6" fill="#4b3a8c"/><circle cx="50" cy="60" r="6" fill="#3e2f7a"/>',
+  strawberry: '<path d="M50 30c22 0 26 18 14 36-6 10-10 18-14 18s-8-8-14-18c-12-18-8-36 14-36z" fill="#e8434f"/><path d="M36 30l14-10 14 10-14 4z" fill="#3f8a47"/>' + [[42, 44], [56, 46], [48, 58], [58, 62], [42, 64]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2" fill="#ffe9a0"/>`).join(''),
+  apple: '<circle cx="50" cy="56" r="28" fill="#e2403f"/><path d="M50 30q2-12 10-14" stroke="#6a4a2a" stroke-width="4" fill="none"/><ellipse cx="62" cy="22" rx="10" ry="5" fill="#5aa65a" transform="rotate(-20 62 22)"/><ellipse cx="40" cy="46" rx="7" ry="4" fill="#fff" opacity=".4"/>',
+  shimmer: '<path d="M50 90V54" stroke="#4f9a57" stroke-width="4"/>' + [0, 72, 144, 216, 288].map((a, i) => `<ellipse cx="50" cy="34" rx="9" ry="16" fill="hsl(${a + 200},80%,78%)" transform="rotate(${a} 50 48)"/>`).join('') + '<circle cx="50" cy="48" r="7" fill="#fff6c8"/>',
+  pine: '<path d="M50 10L74 46H60L80 76H20L40 46H26z" fill="#2b6343"/><rect x="46" y="76" width="8" height="14" fill="#6a4a2a"/><circle cx="58" cy="62" r="4" fill="#e8b84a"/>',
+  fungus: '<rect x="20" y="10" width="14" height="84" fill="#7a6a5a"/><path d="M34 34q34-4 42 8q-20 6-42 2z" fill="#c9a06a"/><path d="M34 58q28-4 36 8q-18 5-36 2z" fill="#b8905a"/><path d="M34 34q34-4 42 8" stroke="#8a6a3a" stroke-width="2" fill="none"/>',
+  star: '<path d="M50 90V56" stroke="#5a8a4a" stroke-width="4"/>' + [45, 135, 225, 315].map(a => `<ellipse cx="50" cy="30" rx="12" ry="20" fill="#f6f0c8" stroke="#d8c88a" stroke-width="1.5" transform="rotate(${a} 50 50)"/>`).join('') + '<circle cx="50" cy="50" r="7" fill="#c8b860"/>',
+};
+const page = (title, art, text) => `<h3 style="text-align:center">${title}</h3>${art}<p>${text}</p>`;
+const BOOKS = {
+  symbols: { title: 'Symbols', pages: () => [
+    page('Symbols of the Land', '', 'Marks carved and painted all over this land, long before the hex. Some of them we have seen. What they mean is still a mystery. This book will fill in as more is learned.'),
+    page('The Looping Knot', svg(SYM.knot), 'Three loops that never end, inside a circle. Carved into the rune stone outside Old Moss\'s hut. <i>Meaning: unknown. Fennel seems to like it.</i>'),
+    page('The Watching Stone', svg(SYM.eye), 'A ring above a standing line. Found on the Old Stones in the forest. <i>Meaning: unknown.</i>'),
+    page('Three Waves', svg(SYM.wave), 'Three rippling lines. <i>Where it is found: not yet seen. Meaning: unknown.</i>'),
+    page('The Unwinding', svg(SYM.spiral), 'A spiral opening outward. <i>Where it is found: not yet seen. Meaning: unknown.</i>'),
+    page('The Branch', svg(SYM.branch), 'A line with three pairs of arms, like a sapling. <i>Where it is found: not yet seen. Meaning: unknown.</i>'),
+    page('Moon and Seed', svg(SYM.moon), 'A crescent cradling a single dot. <i>Where it is found: not yet seen. Meaning: unknown.</i>'),
+  ] },
+  vegetation: { title: 'Vegetation', pages: () => [
+    page('What Grows Here', '', 'A gardener\'s notes on the plants of this land: how to know them, and what they are good for. Magic is part of the world, and so it is part of these notes.'),
+    page('Inkberry', svg(PLANT.inkberry), 'A low bush with very dark leaves, serrated at the edges, growing in groups of six. The berries are deep purple and terribly tart, with no nourishment at all. <b>Use:</b> ground into ink, they help magic take hold on the page. Writing spells will not work without them.'),
+    page('Wild Strawberry', svg(PLANT.strawberry), 'A creeping plant with three-part leaves and small white flowers that become sweet red berries. <b>Use:</b> good to eat, and loved by bakers and fairies alike.'),
+    page('Apple', svg(PLANT.apple), 'An orchard tree. A healthy tree keeps a few apples ripening at all times. Choked by weeds, it bears nothing. <b>Use:</b> food, baking, and a fine treat.'),
+    page('Shimmer Flower', svg(PLANT.shimmer), 'Five petals that seem to change color when you look away. Rare. <b>Use:</b> ground into dust, it helps magic see what is hidden.'),
+    page('Pine', svg(PLANT.pine), 'Tall and pointed, with needles instead of leaves. Its bark weeps golden resin. <b>Use:</b> the resin is a natural glue, and a key part of mending.'),
+    page('Tinder Fungus', svg(PLANT.fungus), 'A shelf mushroom that grows on dead trees. Dry, it catches a spark easily. Pounded and cured, it becomes soft "mushroom leather." <b>Use:</b> leatherwork.'),
+    page('Pale Star-Flower', svg(PLANT.star), 'A pale white-yellow flower with four broad petals. <i>Little is known about this one. Where it grows, no one living seems to remember.</i>'),
+  ] },
+  creatures: { title: 'Creatures of Hexwood', pages: () => {
+    const all = [['chipmunk', 'Chipmunk', 'Quick, striped and endlessly curious. They keep treasures and remember the way.'], ['butterfly', 'Butterfly', 'Light as a petal. Sometimes leaves a shimmer petal behind.'],
+      ['bunny', 'Rabbit', 'Gentle and good with their noses. Excellent bakers.'], ['frog', 'Frog', 'Sing in chorus by the water. Sometimes leave a treat.'], ['firefly', 'Firefly', 'A tiny lantern with wings.'],
+      ['bird', 'Songbird', 'Blue, red and yellow. They sing best together.'], ['mouse', 'Mouse', 'Small, tidy, a little nervous. Very good with buttons and string.'], ['squirrel', 'Squirrel', 'Busy, bouncy, and fond of cozy cottages.'],
+      ['badger', 'Badger', 'Gruff, strong, and a fine smith.'], ['beaver', 'Beaver', 'Very good with wood. Runs the mill.'], ['raccoon', 'Raccoon', 'Clever paws. Works mushroom leather.'], ['goose', 'Goose', 'Loud, proud, and the source of every quill in the land.'], ['owl', 'Owl', 'Wise, and fond of books.']];
+    const met = new Set(Object.keys(S.freed).map(id => (CREATURES.find(c => c.id === id) || {}).species));
+    RESIDENTS.forEach(r => { if (r.when()) met.add(r.species); });
+    if (G.flag('libOpen')) met.add('owl');
+    return [page('Creatures of Hexwood', '', 'Every creature you help is written down here. Pages fill in as you meet them.')].concat(all.map(([sp, n, d]) => met.has(sp) ? page(n, '', d) : page('???', '', '<i>Not yet met.</i>')));
+  } },
+  moss: { title: 'Old Moss', pages: () => [
+    page('Old Moss', '', 'Old Moss was the hedge-wizard of this forest, as long as anyone can remember. He lived in the little hut east of town, kept a spellbook and a very tidy garden, and was kind to everything that crawled, hopped or flew.'),
+    page('The Keep', '', 'Moss often walked south, past the willows, to the old Keep. He said the Keep had the finest view in the land, if you climbed all the way to the roof. What he did there, he never said.'),
+    page('The Night of the Hex', '', 'One winter night, the color drained out of everything. Gardens went gray. Doors stuck shut. Creatures curled up under a gray spell and would not wake.'),
+    page('Where Moss Went', '', 'The last anyone saw of Old Moss, he was heading south toward the Keep with his satchel over his shoulder. He locked his spellbook in the bureau first, and left the fairy to watch the hut. He has not been seen since.'),
+    page('', '', '<i>The rest of the pages are blank... for now.</i>'),
+  ] },
 };
