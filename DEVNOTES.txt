@@ -398,6 +398,55 @@ THE QUARRY: from the Keep, heading away from town. Four screens, each with a
 
 STILL TO DISCUSS: the library in town and the other shops.
 
+THE TOWN, NEXT BUILD (Todd's notes, Nov 16 - design draft)
+---------------------------------------------------------
+OWL'S LIBRARY
+  Door puzzle: 6x6 picture puzzle. The picture is an antique oil lamp over
+  an open book (recognizable shapes, a little shading, not ornate). Cut into
+  36 squares and shuffled. Tap one square, then a second; they swap places.
+  Solving it opens the door.
+  Inside: at least 4 bookshelves. Later, build more shelves with wood
+  (planks from the mill).
+  First books, one per shelf:
+    SYMBOLS: about 6 symbols of our world: the one on the standing stones,
+      the rune circle outside the hut, plus other squiggles, arcs and lines.
+      Pictures first; meanings come later as the world grows.
+    VEGETATION: what grows here, how to recognize it, what it's for. E.g.
+      inkberries aid magical writing, very tart, no nutrition; a low bush
+      with very dark serrated leaves in groups of 6. Also strawberries,
+      apples, etc. Includes a pale white-yellow 4-petal flower (dogwood-like)
+      that little is known about.
+      THE FLOWER CHAIN (order matters): find the flower growing in the Keep's
+      conservatory -> then read its page in the Vegetation book -> learn its
+      use in a spell -> go back to the Keep to collect it. Reading the book
+      first does NOT make the flowers collectable.
+    (third book: open)
+  Books from the Keep get moved here later (Carry/Haul spell).
+  Shelf interaction: one shelf shows "Look" the first time: "The Symbols
+  book looks interesting here, do you want to read it?" Yes/No. Yes opens it
+  like the spellbook: scroll pages, then close. Closing says "You put the
+  book back on the shelf." After that the button reads "Read Symbols" and
+  opens it directly. Same for the other books.
+
+PAPER WORKSHOP (next to the library): a trade house like the mill/smithy.
+  Supplies -> finished paper; inkberries -> ink; honey + spider silk ->
+  binding, to make pages into a book.
+  Use of the book: the DISCOVERY spell (powder). For two minutes of walking,
+  the book collects information about the screens you pass through: a kind
+  of map, highlighting magical ingredients, places of strong magic and
+  secrets. Needs GLITTER POWDER: crush a GOLDEN LEAF from a tree that grows
+  in only one place, up by the purple mountains (not mapped yet).
+
+CRAFTING SUPPLIES: door puzzle, also 6x6: a picture of interconnected rings
+  and rods. Each square starts rotated 90/180/270 (rarely 0). Tap a square to
+  turn it 90 degrees clockwise; no auto-stop. Goal: every line connects, no
+  loose ends (like a "pipe" / "net" puzzle).
+  A trade location. The shopkeeper is flustered: "Just getting started here.
+  Just opened the shop. Not much available yet, but come back soon and I'll
+  have more. Today, I only have X." (X and its price: open.)
+
+CLOTHIER: later.
+
 
 NEEDS DESIGN NEXT (Todd to journal):
   - The old keep and its copper quarry (orb rings).
