@@ -1,0 +1,100 @@
+HEXWOOD - WORLD MAP (Todd's plan, Nov 17, 2026)
+================================================
+Source: Todd's hand-drawn grid, docs/Todds_World_Map_sketch_2026-11-17.jpg
+Rows A (south) to H (north); columns 1 (west) to 9 (east).
+Each cell is one map area ("screen"). "--" = not mapped yet.
+
+        1              2                  3              4               5              6                  7                8             9
+  H     --             --                 --             --              --             [#1 future area]   --               --            --
+  G     Deep Caves     Gold Mines         --             Cliff's Edge    Blue Tower     North Road         --               --            --
+  F     Dark Caves     Upper Purple Mtns  World's Edge   --              Forest Path    --                 --               --            --
+  E     --             Lower Purple Mtns  Lowlands       Tig's Hallow    Dark Forest    Western Forest     --               --            --
+  D     --             Running Water      Willow Road*   Thistledown     Old Road       Hut & Old Stones   High Point       --            --
+  C     --             Archery Yard       Sunny Lane     Crossroads      Fairy Woods    Reflection Pool    North Valley     --            --
+  B     --             Labyrinth          THE KEEP       Western Side    Copper Quarry  Granite Quarry     Rainbow Crossing Sky Bridge    [#2 destination]
+  A     --             Gazebo             Game Field     Clay Swamp      ? (uncharted)  Tin Quarry         South Valley     --            --
+
+  * "Willow Road" in Todd's notes = the area built as "Willow Bend" (D3).
+
+BUILT (through v8): D6 Hut & Old Stones (the "out" map), D5 The Old Road,
+D4 Thistledown, D3 Willow Bend. (The hut interior, cellar and library
+interior hang off these.)
+
+AREAS (Todd's descriptions)
+---------------------------
+H6  #1: marker for a new area that will open up later, room to expand.
+G1  Deep Caves: further into the heart of the Purple Mountains.
+G2  Gold Mines: a cave into the Purple Mountains. Gold is possible, but it
+    takes work.
+G3  (not mapped)
+G4  Cliff's Edge: a very small, rocky area next to the keep that might have a
+    secret.
+G5  The Blue Tower: a fairly fresh place, not overly run down. No plan yet.
+G6  North Road: the way out of the current map.
+F1  Dark Caves: more exploration within the Purple Mountains.
+F2  Upper Purple Mountains: rocky area outside, high up the mountains.
+F3  World's Edge: not literally, but the cliff edge to the right drops way
+    down.
+F4  (not mapped)
+F5  Forest Path: the only way through the dark forest to the Blue Tower.
+F6  (not mapped)
+E1  (not mapped)
+E2  Lower Purple Mountains: the lower rocky road and hillside leading up the
+    impressive mountains.
+E3  Lowlands: half grass, half rock approach to the mountains.
+E4  Tig's Hallow: a clearing in the forest where Tig did something memorable,
+    and the area earned the name.
+E5  Dark Forest: thickly treed, little light.
+E6  Western Forest: the dark forest continuing to the right.
+E7  (not mapped)
+D1  (not mapped)
+D2  Running Water: a waterfall off the left side of the Purple Mountains
+    creates the river that flows to Thistledown.
+D3  Willow Road (built as Willow Bend).
+D4  Thistledown (built).
+D5  The Old Road (built).
+D6  The Hut and the Old Stones: the original starting place (built).
+D7  High Point: another cliff edge, reachable only from the south.
+C1  (not mapped)
+C2  Archery Yard: part of the keep grounds set aside for the dangerous sport.
+C3  Sunny Lane: the once picturesque grassy approach to the Keep, from when
+    it was a busy place.
+C4  Crossroads: connects the Keep (via Sunny Lane), Thistledown, the Fairy
+    Woods and the Quarry.
+C5  Fairy Woods: a place of more magic than trees, but plenty of each.
+C6  Reflection Pool: home of the water nymphs, and more magic.
+C7  North Valley: cliff edge, and the only access to High Point.
+B1  (not mapped)
+B2  Labyrinth: full of thickets; the destination in the center is somewhere
+    to go once, probably, for a reward or a further clue.
+B3  THE KEEP: as laid out previously (see DEVNOTES: 5 levels, roof overview,
+    Farsight / Locate / Carry spells).
+B4  Western Side: grassy area next to the keep that may have hosted tents
+    for visitors.
+B5  Copper Quarry: copper.
+B6  Granite Quarry: granite.
+B7  Rainbow Crossing: a magical bridge leads off the cliff edge to the east.
+B8  Sky Bridge: partway across the rainbow crossing; aerial engagement
+    without the hero having to fly or float.
+B9  #2: the rainbow road's destination, a place of high or advanced magic.
+A1  (not mapped)
+A2  Gazebo: once a relaxing garden with a large gazebo for Keep residents.
+A3  Game Field: jousting, discus, javelin and other field games the Keep
+    hosted long ago.
+A4  Clay Swamp: a source of clay.
+A5  Unknown, uncharted quarry area.
+A6  Tin Quarry: tin.
+A7  South Valley: the cliff continues south, creating the edge of the world.
+
+QUESTIONS TO TALK THROUGH LATER (Claude's notes, not decisions)
+---------------------------------------------------------------
+- Earlier notes put the Keep "two screens south of Willow Bend" (that's B3
+  on this grid: D3 -> C3 Sunny Lane -> B3). Matches.
+- Earlier notes listed the quarry as copper / tin / marble / one locked.
+  This map has Copper (B5), Granite (B6), Tin (A6) and an uncharted quarry
+  (A5). Where does marble come from now? (Granite instead, or A5?)
+- Purple mountains are to the north-west (E2/F2); the golden-leaf tree for
+  Glitter Powder (Discovery spell) lives "up by the purple mountains".
+- How the built maps connect today vs. the grid: built maps join east-west
+  (Hut D6 -> Old Road D5 -> Thistledown D4 -> Willow Bend D3). The village's
+  north-west road with fallen trees would lead up toward E3 Lowlands / E4.

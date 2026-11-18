@@ -476,6 +476,11 @@ v8 BUILT (Nov 16):
     binding).
 
 
+WORLD MAP (Nov 17): Todd laid out the whole world as a grid (rows A-H,
+columns 1-9). Full grid, every area's description, and open questions are in
+docs/WORLD_MAP.txt; his sketch is docs/Todds_World_Map_sketch_2026-11-17.jpg.
+Built so far: D6 Hut & Old Stones, D5 Old Road, D4 Thistledown, D3 Willow Bend.
+
 NEEDS DESIGN NEXT (Todd to journal):
   - The old keep and its copper quarry (orb rings).
   - What's beyond the fallen trees on the north-west road (toward the
