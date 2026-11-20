@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v8';
+const VERSION = 'v9';
 const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
@@ -47,6 +47,11 @@ const ITEMS = {
   jar:        { name: 'Glass Jar',     icon: '🫙', kind: 'tool',       desc: 'An empty jar with a cork. Good for collecting honey.' },
   paper:      { name: 'Paper',         icon: '📄', kind: 'ingredient', desc: 'Fresh sheets from Marigold\'s workshop.' },
   blankbook:  { name: 'Blank Book',    icon: '📓', kind: 'tool',       desc: 'A bound book of empty pages. Someday a spell will fill it.' },
+  compass:    { name: 'Brass Compass', icon: '🧭', kind: 'curio',      desc: 'Hidden in the old signpost. It always points toward the Keep.' },
+  silvercoin: { name: 'Silver Coin',   icon: '🪙', kind: 'curio',      desc: 'An old coin from the Sunny Lane fountain, stamped with a tower.' },
+  locket:     { name: 'Faded Locket',  icon: '📿', kind: 'curio',      desc: 'Inside: a tiny painted portrait, and one word, "Tig".' },
+  goblet:     { name: 'Silver Goblet', icon: '🏆', kind: 'curio',      desc: 'From the Keep\'s long dining table. Engraved with the looping knot.' },
+  mossnote:   { name: 'Old Moss\'s Note', icon: '📝', kind: 'tool',    desc: '"If you are reading this, the hex has held. I have gone up, toward the roof, to see where it came from. The stairs will not let just anyone pass. Light, warmth and music woke the hall for me... I hope they do for you. - M."' },
   pearl:      { name: 'River Pearl',   icon: '🫧', kind: 'curio',      desc: 'A pearl with a faint rainbow inside, from the frogs\' island.' },
   moonpebble: { name: 'Moon Pebble',   icon: '🌙', kind: 'curio',      desc: 'A pale pebble that glows at night.' },
   goldacorn:  { name: 'Golden Acorn',  icon: '🌰', kind: 'curio',      desc: 'An acorn of real gold. The chipmunks\' treasure.' },
@@ -191,6 +196,8 @@ const RECIPES = [
   { id: 'flour',     station: 'mill', req: () => G.flag('millMended'), needs: { shortcake: 1 }, makes: 'flour', n: 3, verb: 'Trade' },
   { id: 'bigpouch',  station: 'leather', req: () => G.flag('leatherMended') && !G.flag('bigPouch'), needs: { fungus: 3, berrytart: 1 }, special: 'bigpouch', verb: 'Trade',
     label: 'Leather spell pouch (holds 9 spells)', icon: '👝' },
+  { id: 'satchel',   station: 'leather', req: () => G.flag('leatherMended') && G.flag('bigPouch') && !G.flag('bigSatchel'), needs: { fungus: 4, berrytart: 1 }, special: 'satchel', verb: 'Trade',
+    label: 'Leather satchel (carry twice as much)', icon: '🎒' },
 ];
 
 const STATION_NAMES = { mortar: 'Mortar & Pestle', bench: 'Workbench', fairy: 'Fennel the Fairy', bakery: 'Rosie\'s Bakery', smithy: 'Bruno\'s Smithy', mill: 'Barnaby\'s Mill', leather: 'Rufus\'s Leather Goods', paper: 'Marigold\'s Paper Workshop', crafts: 'Tilly\'s Crafting Supplies' };
@@ -384,8 +391,101 @@ function buildVillage() {
   [[7, 9], [8, 16], [32, 3], [32, 10], [32, 18], [21, 20], [13, 20]].forEach(([x, y]) => set(x, y, 'T'));
   set(W - 1, 25, '=');
   set(0, 13, '=');   // the road west, once the bridge is mended
+  rect(0, 2, 4, 3, '~');                    // the river arrives from Willow Bend
+  rect(19, 26, 20, H - 1, '=');             // past the bridge, south to the Crossroads
+  rect(19, 24, 20, 25, '=');
   return g.map(r => r.join(''));
 }
+
+// helpers shared by the new outdoor maps
+function blankMap(W, H, seed) {
+  const g = [];
+  for (let y = 0; y < H; y++) g.push(new Array(W).fill(','));
+  const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < W && y < H) g[y][x] = c; };
+  const rect = (x0, y0, x1, y1, c) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) set(x, y, c); };
+  const R = rng(seed);
+  rect(0, 0, W - 1, 0, 'T'); rect(0, H - 1, W - 1, H - 1, 'T'); rect(0, 0, 0, H - 1, 'T'); rect(W - 1, 0, W - 1, H - 1, 'T');
+  const keep = new Set();
+  const k = (x, y, r = 1) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) keep.add((x + dx) + ',' + (y + dy)); };
+  const scatter = (dens, x0 = 1, y0 = 1, x1 = W - 2, y1 = H - 2) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (g[y][x] !== ',' || keep.has(x + ',' + y)) continue;
+      const r = R();
+      if (r < dens) set(x, y, R() < 0.3 ? 'P' : 'T'); else if (r < dens + 0.04) set(x, y, 'b'); else if (r < dens + 0.16) set(x, y, ':');
+    }
+  };
+  return { g, set, rect, R, k, keep, scatter, done: () => g.map(r => r.join('')) };
+}
+
+// C4 The Crossroads: two roads cross. North: Thistledown. West: Sunny Lane and the Keep.
+// East: the Fairy Woods (veiled). South: the quarry road (rockslide).
+function buildCrossroads() {
+  const W = 32, H = 22, M = blankMap(W, H, 71);
+  M.rect(15, 0, 16, H - 1, '='); M.rect(0, 10, W - 1, 11, '=');
+  for (let y = 0; y < H; y++) { M.keep.add('14,' + y); M.keep.add('17,' + y); }
+  for (let x = 0; x < W; x++) { M.keep.add(x + ',9'); M.keep.add(x + ',12'); }
+  [[17, 8], [8, 6], [22, 5], [24, 15], [6, 15], [26, 9]].forEach(([x, y]) => M.k(x, y));
+  M.scatter(0.14);
+  M.rect(26, 7, 30, 14, ','); M.k(28, 10, 3);
+  [[27, 7], [29, 8], [27, 13], [30, 12]].forEach(([x, y]) => M.set(x, y, ':'));
+  return M.done();
+}
+
+// C3 Sunny Lane: the once-lovely approach to the Keep. A path comes down from Willow Bend;
+// the main road rises from the Keep in the south and bends east to the Crossroads.
+function buildSunnyLane() {
+  const W = 32, H = 22, M = blankMap(W, H, 83);
+  M.rect(8, 0, 8, 11, '='); M.rect(8, 11, W - 1, 11, '='); M.rect(16, 11, 16, H - 1, '='); M.rect(15, 12, 15, H - 1, '=');
+  for (let x = 7; x < W; x++) { M.keep.add(x + ',10'); M.keep.add(x + ',12'); }
+  for (let y = 0; y < H; y++) { M.keep.add('7,' + y); M.keep.add('9,' + y); M.keep.add('14,' + y); M.keep.add('17,' + y); }
+  [[20, 14], [21, 14], [20, 15], [21, 15], [5, 15], [26, 6], [12, 17], [24, 17], [11, 5]].forEach(([x, y]) => M.k(x, y));
+  M.scatter(0.1);
+  // overgrown flower beds and hedges along the lane
+  for (let x = 18; x < W - 1; x += 2) { M.set(x, 9, ':'); M.set(x, 13, ':'); }
+  [[19, 8], [23, 8], [27, 8]].forEach(([x, y]) => M.set(x, y, 'b'));
+  return M.done();
+}
+
+// B3 The Keep grounds: the Keep faces south. You arrive from the north and must go round its
+// east side, where brambles block the way, to reach the front courtyard.
+function buildKeepYard() {
+  const W = 30, H = 24, M = blankMap(W, H, 97);
+  M.rect(15, 0, 15, 2, '='); M.rect(15, 2, 25, 2, '='); M.rect(25, 2, 25, 16, '='); M.rect(10, 16, 25, 16, '=');
+  M.rect(8, 13, 21, 19, ','); M.rect(14, 12, 15, 19, '=');      // front courtyard and the walk to the door
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    const nearPath = (Math.abs(x - 25) <= 1 && y >= 1 && y <= 17) || (y >= 1 && y <= 3 && x >= 14 && x <= 26) || (x >= 7 && x <= 22 && y >= 12 && y <= 20);
+    if (nearPath || (x >= 7 && x <= 22 && y >= 2 && y <= 12)) continue;
+    if (M.g[y][x] === ',' && M.R() < 0.55) M.set(x, y, M.R() < 0.4 ? 'P' : 'T');
+  }
+  // bramble wall across the east path
+  [[24, 7], [25, 7], [26, 7], [24, 8], [25, 8], [26, 8]].forEach(([x, y]) => M.set(x, y, 't'));
+  // the Keep's walls keep you from slipping past on the west
+  M.rect(1, 12, 6, 20, 'T'); M.rect(7, 20, 22, 21, 'h'); M.rect(23, 17, 28, 21, 'T');
+  M.rect(6, 3, 7, 12, 'T'); M.rect(22, 3, 23, 12, 'T'); M.rect(27, 3, 28, 12, 'T');   // no slipping round the sides
+  return M.done();
+}
+
+// B3 inside: the Keep's ground floor.
+const KEEP_MAP = [
+  'SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS',
+  'S_________S_rrrrrr_S_________S',
+  'S_________S_rrrrrr_S_________S',
+  'S_________S_rrrrrr_S_________S',
+  'S_________S_rrrrrr_S_________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'SSSSS_SSSSS__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'S__________rrrrrrrr__________S',
+  'S__________rrrrrrrr__________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'S_________S__rrrr__S_________S',
+  'SSSSSSSSSSSSSSDDSSSSSSSSSSSSSS',
+];
 
 // Willow Bend: the west bank, across the mended bridge. A pond with an island.
 function buildWestbank() {
@@ -411,6 +511,10 @@ function buildWestbank() {
   [[22, 5], [8, 18], [25, 17]].forEach(([x, y]) => set(x, y, 'P'));
   [[23, 3], [26, 3]].forEach(([x, y]) => set(x, y, 'R'));
   set(W - 1, 13, '=');
+  // the river from the waterfall (west) flows east toward town; a little stream feeds the pond
+  rect(0, 2, W - 1, 3, '~'); rect(15, 4, 15, 6, '~');
+  // a break in the trees to the south, flanked by shrubs, toward Sunny Lane
+  rect(12, 17, 12, H - 1, '='); [17, 18, 19, 20].forEach(y => { set(11, y, 'b'); set(13, y, 'b'); });
   return g.map(r => r.join(''));
 }
 
@@ -429,6 +533,15 @@ const ZONES = {
   road: [{ id: 'road', name: 'The Old Road', rect: [0, 0, 29, 19] }],
   library: [{ id: 'library', name: 'Inside the Library', rect: [0, 0, 10, 8] }],
   westbank: [{ id: 'westbank', name: 'Willow Bend', rect: [0, 0, 29, 21] }],
+  crossroads: [{ id: 'crossroads', name: 'The Crossroads', rect: [0, 0, 31, 21] }],
+  sunnylane: [{ id: 'sunnylane', name: 'Sunny Lane', rect: [0, 0, 31, 21] }],
+  keepyard: [{ id: 'keepyard', name: 'The Keep', rect: [0, 0, 29, 23] }],
+  keep: [
+    { id: 'k_kitchen',  name: 'The Kitchen',  rect: [0, 0, 10, 8] },
+    { id: 'k_dining',   name: 'The Dining Room', rect: [0, 9, 10, 17] },
+    { id: 'k_ballroom', name: 'The Ballroom', rect: [19, 0, 29, 17] },
+    { id: 'k_lobby',    name: 'The Great Hall', rect: [11, 0, 18, 17] },
+  ],
   village: [
     { id: 'v_bakery', name: 'The Bakery',      rect: [8, 8, 13, 12] },
     { id: 'v_home1',  name: 'Bramble Cottage', rect: [14, 8, 18, 12] },
@@ -564,7 +677,7 @@ const OBJECTS = [
   { id: 'rune', map: 'out', tx: 10, ty: 15, tw: 2, th: 2, solid: false, layer: 'floor', draw: 'rune',
     act: () => G.flag('fairyOutNow') ? null : ({ label: 'Look at the rune', fn: () => G.say(['An old rune circle set into the ground, carved with knots that loop forever.', F('fairyFree') ? 'When you stand on it, Fennel can find you.' : 'It hums very faintly.']) }) },
   { id: 'strawpatch', map: 'out', tx: 24, ty: 20, solid: false, draw: 'strawpatch',
-    act: () => G.count('strawberry') < 3 ? { label: 'Pick a strawberry', fn: () => { G.give('strawberry'); } } : { label: 'Look', fn: () => G.say(['Wild strawberries. You have plenty for now.']) } },
+    act: () => G.count('strawberry') < G.cap('strawberry') ? { label: 'Pick a strawberry', fn: () => { G.give('strawberry'); } } : { label: 'Look', fn: () => G.say(['Wild strawberries. You have plenty for now.']) } },
   { id: 'well', map: 'out', tx: 3, ty: 12, draw: 'well',
     act: () => ({ label: 'Look in the well', fn: () => G.say([G.zoneGray('yard') > 0 ? 'A deep, cool well. Your reflection looks back, the only color around.' : 'A deep, cool well. Your reflection looks back, with blue sky and green leaves all around it.']) }) },
   { id: 'bell', map: 'out', tx: 37, ty: 12, solid: false, draw: 'pickup', icon: '🔔', vis: () => F('bunnyLed') && !F('bellTaken'),
@@ -574,12 +687,12 @@ const OBJECTS = [
     act: () => {
       if (!F('weedsCut')) return G.has('machete') ? { label: 'Cut away the weeds', fn: () => { G.setFlag('weedsCut'); G.chime(2); G.burstAt(11.5, 3.5, '#c8f0a0'); G.say(['You hack away the choking bindweed. The old apple tree seems to stand up straighter.', 'Apples are already ripening on its branches.']); } }
         : { label: 'Look at the apple tree', fn: () => G.say(['An old apple tree, choked with tangled bindweed. Not a single apple.', 'If only you had a blade to cut it free.']) };
-      return G.count('apple') < 3 ? { label: 'Pick an apple', fn: () => G.give('apple') } : { label: 'Look', fn: () => G.say(['There are always a few apples ripening here.']) };
+      return G.count('apple') < G.cap('apple') ? { label: 'Pick an apple', fn: () => G.give('apple') } : { label: 'Look', fn: () => G.say(['There are always a few apples ripening here.']) };
     } },
   { id: 'iron1', map: 'road', tx: 16, ty: 11, draw: 'ironrock',
-    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+    act: () => G.count('ironstone') < G.cap('ironstone') ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
   { id: 'iron2', map: 'road', tx: 17, ty: 11, draw: 'ironrock',
-    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+    act: () => G.count('ironstone') < G.cap('ironstone') ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
   { id: 'roadsign', map: 'road', tx: 3, ty: 7, draw: 'signpost',
     act: () => ({ label: 'Read the signpost', fn: () => G.say([`The old signpost points west: "${VILLAGE_NAME}". The other arm, pointing back east, just says "Moss".`]) }) },
 
@@ -644,11 +757,11 @@ const OBJECTS = [
   // ---------- Willow Bend
   { id: 'web3', map: 'westbank', tx: 6, ty: 5, solid: false, draw: 'web', act: () => G.webAct() },
   { id: 'iron3', map: 'westbank', tx: 24, ty: 4, draw: 'ironrock',
-    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+    act: () => G.count('ironstone') < G.cap('ironstone') ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
   { id: 'iron4', map: 'westbank', tx: 25, ty: 4, draw: 'ironrock',
-    act: () => G.count('ironstone') < 4 ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
+    act: () => G.count('ironstone') < G.cap('ironstone') ? { label: 'Chip off iron-stone', fn: () => G.give('ironstone') } : { label: 'Look', fn: () => G.say(['A rusty-red rock. You have all the iron-stone you can carry.']) } },
   { id: 'strawpatch2', map: 'westbank', tx: 5, ty: 18, solid: false, draw: 'strawpatch',
-    act: () => G.count('strawberry') < 3 ? { label: 'Pick a strawberry', fn: () => G.give('strawberry') } : { label: 'Look', fn: () => G.say(['Wild strawberries. You have plenty for now.']) } },
+    act: () => G.count('strawberry') < G.cap('strawberry') ? { label: 'Pick a strawberry', fn: () => G.give('strawberry') } : { label: 'Look', fn: () => G.say(['Wild strawberries. You have plenty for now.']) } },
   { id: 'islandwisp', map: 'westbank', tx: 14, ty: 10, solid: false, draw: 'pickup', icon: '💫', vis: () => F('frogsSang') && !F('islandWisp'),
     act: () => ({ label: 'Take the feather', fn: () => { G.give('wisp'); G.setFlag('islandWisp'); G.islandCheck(); } }) },
   { id: 'islandpearl', map: 'westbank', tx: 15, ty: 11, solid: false, draw: 'pickup', icon: '🫧', vis: () => F('frogsSang') && !F('pearlTaken'),
@@ -668,8 +781,55 @@ const OBJECTS = [
     act: () => ({ label: 'Go outside', fn: () => G.goMap('village', 11, 5.6) }) },
   // ---------- Willow Bend bee tree
   { id: 'beetree', map: 'westbank', tx: 23, ty: 14, draw: 'beetree',
-    act: () => G.has('jar') ? (G.count('honey') < 2 ? { label: 'Collect honey', fn: () => { G.give('honey'); G.say(['You hold the jar under the hollow. The bees grumble but let you have some. Wildflower honey!']); } } : { label: 'Look at the bee tree', fn: () => G.say(['The bees are busy. You have all the honey you can carry for now.']) })
+    act: () => G.has('jar') ? (G.count('honey') < G.cap('honey') ? { label: 'Collect honey', fn: () => { G.give('honey'); G.say(['You hold the jar under the hollow. The bees grumble but let you have some. Wildflower honey!']); } } : { label: 'Look at the bee tree', fn: () => G.say(['The bees are busy. You have all the honey you can carry for now.']) })
       : { label: 'Look at the bee tree', fn: () => G.say(['Bees hum in and out of a hollow in the trunk. Golden honey glistens inside.', 'You\'d need a jar to collect any.']) } },
+
+  // ---------- the Crossroads
+  { id: 'signpost4', map: 'crossroads', tx: 17, ty: 8, draw: 'signpost4',
+    act: () => F('signpostSolved') ? { label: 'Read the signpost', fn: () => G.say(['North: Thistledown. West: The Keep. East: Fairy Woods. South: The Quarry. All pointing true again.']) }
+      : { label: 'Look at the signpost', fn: () => G.say(['A tall, old signpost with four arms. They\'ve all spun loose in the wind and point every which way.', 'Something rattles inside the post when you touch it.'], () => G.openSignpost()) } },
+  { id: 'fairyveil', map: 'crossroads', tx: 30, ty: 9, th: 4, draw: 'veil', layer: 'normal',
+    act: () => ({ label: 'Look at the shimmer', fn: () => G.say(['The road east vanishes into a shimmering veil, like heat over a summer road. Behind it, trees glitter.', 'It gently pushes you back. The Fairy Woods aren\'t ready for visitors yet.', '(A later version.)']) }) },
+  { id: 'rockslide', map: 'crossroads', tx: 14, ty: 18, tw: 4, th: 3, draw: 'rockslide',
+    act: () => ({ label: 'Look at the rockslide', fn: () => G.say(['Boulders have tumbled across the south road toward the quarries. Far too heavy to move by hand.', 'If only there were a way to make heavy things light...']) }) },
+  { id: 'xwell', map: 'crossroads', tx: 22, ty: 5, draw: 'well',
+    act: () => ({ label: 'Look in the well', fn: () => G.say(['An old travellers\' well. Someone has scratched four arrows into the stone rim: north, east, south and west.']) }) },
+  // ---------- Sunny Lane
+  { id: 'fountain', map: 'sunnylane', tx: 20, ty: 14, tw: 2, th: 2, draw: 'fountain', mend: 'fountainMended',
+    act: () => F('fountainMended') ? (F('coinTaken') ? { label: 'Look at the fountain', fn: () => G.say(['The fountain splashes happily. Sunny Lane feels sunny again.']) } : { label: 'Look in the basin', fn: () => { G.give('silvercoin'); G.setFlag('coinTaken'); G.curio('silvercoin'); } })
+      : { label: 'Look at the fountain', fn: () => G.say(['A stone fountain, cracked right down the middle. Its basin is dry and full of gray leaves.', 'Something glints at the bottom, under the leaves, but the crack is too sharp to reach past.']) } },
+  { id: 'lamp1', map: 'sunnylane', tx: 18, ty: 12, draw: 'lamppost', act: () => null },
+  { id: 'lamp2', map: 'sunnylane', tx: 24, ty: 12, draw: 'lamppost', act: () => null },
+  { id: 'lamp3', map: 'sunnylane', tx: 28, ty: 12, draw: 'lamppost', act: () => null },
+  { id: 'lamp4', map: 'sunnylane', tx: 17, ty: 17, draw: 'lamppost', act: () => null },
+  { id: 'locket', map: 'sunnylane', tx: 11, ty: 5, solid: false, draw: 'pickup', icon: '📿', secret: true, vis: () => !F('locketTaken'),
+    act: () => ({ label: 'Pick up the locket', fn: () => { G.give('locket'); G.setFlag('locketTaken'); G.curio('locket'); } }) },
+  // ---------- the Keep grounds
+  { id: 'keepx', map: 'keepyard', tx: 8, ty: 3, tw: 14, th: 9, draw: 'keepx',
+    act: () => F('keepOpen') ? { label: 'Enter the Keep', fn: () => G.goMap('keep', 15, 16.3) }
+      : { label: 'Look at the great door', fn: () => G.say(['The Keep\'s great door is sealed by a ring of gray light. Set into it are four empty slots, numbered I, II, III and IV.', 'Each slot can turn to show a symbol.'], () => G.openSeal()) } },
+  { id: 'statue1', map: 'keepyard', tx: 9, ty: 14, draw: 'statue', sym: 'knot', num: 'II', act: () => G.statueAct('statue1') },
+  { id: 'statue2', map: 'keepyard', tx: 20, ty: 14, draw: 'statue', sym: 'branch', num: 'IV', act: () => G.statueAct('statue2') },
+  { id: 'statue3', map: 'keepyard', tx: 9, ty: 18, draw: 'statue', sym: 'wave', num: 'I', act: () => G.statueAct('statue3') },
+  { id: 'statue4', map: 'keepyard', tx: 20, ty: 18, draw: 'statue', sym: 'moon', num: 'III', act: () => G.statueAct('statue4') },
+  // ---------- inside the Keep
+  { id: 'kdoor', map: 'keep', tx: 14, ty: 17, tw: 2, layer: 'wall', draw: 'ldoor', act: () => ({ label: 'Go outside', fn: () => G.goMap('keepyard', 15, 13.4) }) },
+  { id: 'kstairsup', map: 'keep', tx: 15, ty: 1, tw: 3, th: 4, solid: false, layer: 'floor', draw: 'kstairs', up: true,
+    act: () => ({ label: '⬆ Stairs up', fn: () => G.say(F('keepAwake') ? ['The gray light on the stairs has thinned to a faint shimmer... but it still won\'t let you pass.', '(The upper floors come in a later version.)'] : ['A curtain of gray light hangs across the stairs going up. It hums, and won\'t let you pass.']) }) },
+  { id: 'kstairsdown', map: 'keep', tx: 12, ty: 1, tw: 3, th: 4, solid: false, layer: 'floor', draw: 'kstairs', up: false,
+    act: () => ({ label: '⬇ Stairs down', fn: () => G.say(['The stairs down disappear into deep darkness. A cold draft rises from below, and an iron grate is locked across the steps.', '(The lower floors come in a later version.)']) }) },
+  { id: 'khearth', map: 'keep', tx: 3, ty: 1, tw: 3, draw: 'khearth', kindle: 'keepHearth',
+    act: () => F('keepHearth') ? (G.has('mossnote') ? { label: 'Warm your hands', fn: () => G.say(['The great kitchen hearth burns steady and warm.']) } : { label: 'Look at the mantel', fn: () => { G.give('mossnote'); G.say(['In the warm light, you notice a folded note tucked behind a jar on the mantel. It\'s written in a spidery, careful hand.', '"If you are reading this, the hex has held. I have gone up, toward the roof, to see where it came from. The stairs will not let just anyone pass. Light, warmth and music woke the hall for me... I hope they do for you. - M."', 'Old Moss!']); G.keepCheck(); } })
+      : { label: 'Look at the hearth', fn: () => G.say(['A huge kitchen hearth, cold for years. Pots hang over gray ashes.', 'It would take a fire that never goes out to warm this room again.']) } },
+  { id: 'ktable', map: 'keep', tx: 2, ty: 11, tw: 7, th: 2, draw: 'ktable', act: () => F('chandLit') && !F('gobletTaken') ? { label: 'Pick up the goblet', fn: () => { G.give('goblet'); G.setFlag('gobletTaken'); G.curio('goblet'); } } : null },
+  { id: 'chandelier', map: 'keep', tx: 5, ty: 14, solid: false, layer: 'normal', draw: 'chandelier',
+    act: () => F('chandLit') ? null : G.lightActive() ? { label: 'Hold your light up', fn: () => G.lightChandelier() }
+      : { label: 'Look up', fn: () => G.say(['A great iron chandelier hangs over the dining table, its candles gray and cold.', 'The room is too dim to see much. Some light might help.']) } },
+  { id: 'musicbox', map: 'keep', tx: 24, ty: 7, draw: 'musicbox', mend: 'musicMended',
+    act: () => F('musicMended') ? (F('ballWisp') ? { label: 'Listen', fn: () => G.say(['The little music box tinkles its waltz, over and over.']) } : null)
+      : { label: 'Look at the music box', fn: () => G.say(['On a pedestal in the middle of the ballroom sits a silver music box. Its lid is cracked and its key is bent.', 'The whole ballroom seems to be holding its breath, waiting for a song.']) } },
+  { id: 'ballwisp', map: 'keep', tx: 24, ty: 10, solid: false, draw: 'pickup', icon: '💫', vis: () => F('musicMended') && !F('ballWisp'),
+    act: () => ({ label: 'Take the feather', fn: () => { G.give('wisp'); G.setFlag('ballWisp'); G.say(['A Wisp Feather, left drifting in the middle of the dance floor.']); } }) },
 
   // secrets (need the Seeker Orb)
   { id: 'moonpebble', map: 'out', tx: 28, ty: 5, solid: false, draw: 'pickup', icon: '🌙', secret: true, vis: () => !F('pebbleTaken'),
@@ -706,6 +866,12 @@ const CREATURES = [
   { id: 'v_yellow',map: 'village', x: 30.5, y: 20.3, species: 'bird', color: '#f0c43a', zone: 'village' },
   { id: 'v_mouse1',map: 'village', x: 22.3, y: 12.4, species: 'mouse', zone: 'village' },
   { id: 'v_mouse2',map: 'village', x: 16.5, y: 20.2, species: 'mouse', zone: 'village' },
+  { id: 'x_hedge', map: 'crossroads', x: 8.5, y: 6.5, species: 'hedgehog', zone: 'crossroads', reward: { item: 'button', n: 1, text: 'It snuffles, and leaves you a shiny button it was carrying.' } },
+  { id: 'x_bun',   map: 'crossroads', x: 24.5, y: 15.5, species: 'bunny', zone: 'crossroads' },
+  { id: 'x_fly',   map: 'crossroads', x: 6.5, y: 15.5, species: 'butterfly', zone: 'crossroads' },
+  { id: 's_sq',    map: 'sunnylane', x: 5.5, y: 15.5, species: 'squirrel', zone: 'sunnylane' },
+  { id: 's_bird',  map: 'sunnylane', x: 26.5, y: 6.5, species: 'bird', color: '#9a6ad8', zone: 'sunnylane' },
+  { id: 's_hedge', map: 'sunnylane', x: 12.5, y: 17.5, species: 'hedgehog', zone: 'sunnylane' },
   { id: 'w_frog1', map: 'westbank', x: 9.5,  y: 8.5,  species: 'frog', zone: 'westbank' },
   { id: 'w_frog2', map: 'westbank', x: 20.5, y: 9.5,  species: 'frog', zone: 'westbank' },
   { id: 'w_frog3', map: 'westbank', x: 12.5, y: 15.3, species: 'frog', zone: 'westbank' },
@@ -727,7 +893,7 @@ const RESIDENTS = [
 ];
 
 // Zone challenges for zones that clear by freeing every hexed creature in them.
-const FREE_ALL_ZONES = ['yard', 'meadow', 'brook', 'road', 'village', 'westbank'];
+const FREE_ALL_ZONES = ['yard', 'meadow', 'brook', 'road', 'village', 'westbank', 'crossroads'];
 
 const CLUES = {
   frogs: 'Four voices in the reeds. When the frogs sing together, the pond remembers its old stepping stones.',
@@ -778,7 +944,7 @@ const BOOKS = {
     page('Pale Star-Flower', svg(PLANT.star), 'A pale white-yellow flower with four broad petals. <i>Little is known about this one. Where it grows, no one living seems to remember.</i>'),
   ] },
   creatures: { title: 'Creatures of Hexwood', pages: () => {
-    const all = [['chipmunk', 'Chipmunk', 'Quick, striped and endlessly curious. They keep treasures and remember the way.'], ['butterfly', 'Butterfly', 'Light as a petal. Sometimes leaves a shimmer petal behind.'],
+    const all = [['hedgehog', 'Hedgehog', 'Prickly outside, soft inside. Always carrying something small and shiny.'], ['chipmunk', 'Chipmunk', 'Quick, striped and endlessly curious. They keep treasures and remember the way.'], ['butterfly', 'Butterfly', 'Light as a petal. Sometimes leaves a shimmer petal behind.'],
       ['bunny', 'Rabbit', 'Gentle and good with their noses. Excellent bakers.'], ['frog', 'Frog', 'Sing in chorus by the water. Sometimes leave a treat.'], ['firefly', 'Firefly', 'A tiny lantern with wings.'],
       ['bird', 'Songbird', 'Blue, red and yellow. They sing best together.'], ['mouse', 'Mouse', 'Small, tidy, a little nervous. Very good with buttons and string.'], ['squirrel', 'Squirrel', 'Busy, bouncy, and fond of cozy cottages.'],
       ['badger', 'Badger', 'Gruff, strong, and a fine smith.'], ['beaver', 'Beaver', 'Very good with wood. Runs the mill.'], ['raccoon', 'Raccoon', 'Clever paws. Works mushroom leather.'], ['goose', 'Goose', 'Loud, proud, and the source of every quill in the land.'], ['owl', 'Owl', 'Wise, and fond of books.']];

@@ -23,8 +23,8 @@ const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x 
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
 
 // ================================================================ maps
-const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't', 'P', 'L']);
-const OUTDOOR = ['out', 'road', 'village', 'westbank'];
+const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't', 'P', 'L', 'S']);
+const OUTDOOR = ['out', 'road', 'village', 'westbank', 'crossroads', 'sunnylane', 'keepyard'];
 const MAPS = {};
 function addMap(id, rows, dark) {
   MAPS[id] = { id, rows: rows.map(r => r.split('')), w: rows[0].length, h: rows.length, objs: OBJECTS.filter(o => o.map === id), solid: null };
@@ -37,6 +37,10 @@ addMap('out', buildOutdoor());
 addMap('road', buildRoad());
 addMap('village', buildVillage());
 addMap('westbank', buildWestbank());
+addMap('crossroads', buildCrossroads());
+addMap('sunnylane', buildSunnyLane());
+addMap('keepyard', buildKeepYard());
+addMap('keep', KEEP_MAP);
 
 // ================================================================ state
 const SAVE_KEY = 'hexwood_save_v1';  // v2 keeps the same save slot
@@ -46,7 +50,7 @@ function newState() {
     ver: 1, map: 'hut', px: 3.5, py: 3.5, dir: 1,
     flags: {}, inv: {}, pouch: [], pages: {}, late: {}, revealed: {}, lanterns: {}, freed: {},
     zones: { hut: 1, cellar: 1, grove: 1, stones: 1, yard: 1, meadow: 1, brook: 1, hollow: 1, road: 1, village: 1, v_bakery: 1, v_home1: 1, v_smithy: 1, v_home2: 1, v_mill: 1, v_leather: 1, westbank: 1, library: 0, v_library: 1, v_paper: 1, v_crafts: 1 },
-    booksSeen: {}, puz: {},
+    booksSeen: {}, puz: {}, statues: {},
     cut: {}, visited: {},
     clues: [], curios: {}, gifts: {}, maxCharge: 3, time: 0,
   };
@@ -126,13 +130,34 @@ const G = {
     notice(`${it.icon} You found a curio: ${it.name}! ${it.desc}`, 'journal');
   },
   burstAt(x, y, c) { burst(x, y, c, 24); },
+  // how many of a gathered thing you can carry; the leather satchel doubles it
+  cap(k) { const base = { apple: 4, strawberry: 4, ironstone: 4, bark: 3, fungus: 4, resin: 3, silk: 3, honey: 2 }[k] || 3; return base * (G.flag('bigSatchel') ? 2 : 1); },
   openPuzzle(k) { openPuzzle(k); },
+  openSignpost() { openSignpost(); },
+  openSeal() { openSeal(); },
+  statueAct(id) {
+    const o = OBJECTS.find(o => o.id === id);
+    if (!S.statues[id]) return G.has('machete') ? { label: 'Cut away the vines', fn: () => { S.statues[id] = true; save(); burst(o.tx + 0.5, o.ty, '#9ad370', 20); blip(500); G.say([`Under the vines, the statue holds a stone tablet. Carved on it: a symbol, and the numeral ${o.num}.`]); } }
+      : { label: 'Look at the statue', fn: () => G.say(['A stone statue so wrapped in hexed vines you can barely tell what it is. It seems to be holding something.', 'You\'d need a blade to clear them.']) };
+    return { label: 'Look at the statue', fn: () => G.say([`The statue holds a stone tablet with a symbol on it, and the numeral ${o.num}.`]) };
+  },
+  lightChandelier() {
+    S.flags.chandLit = true; chime(3); burst(5.5, 13.5, '#ffe9a8', 36); G.setZone('k_dining', 0); save();
+    G.say(['You raise your light toward the chandelier. One by one, its candles catch, until the whole dining room glows.', 'Something gleams on the long table.']);
+    G.keepCheck();
+  },
+  keepCheck() {
+    if (G.flag('keepHearth') && G.flag('chandLit') && G.flag('musicMended') && !G.flag('keepAwake')) {
+      S.flags.keepAwake = true; G.setZone('k_lobby', 0); save();
+      setTimeout(() => { chime(4); notice('🏰 Light, warmth and music: the great hall of the Keep wakes up. The gray light on the stairs grows thin.'); }, 1200);
+    }
+  },
   shelfAct(b) {
     const t = BOOKS[b].title;
     if (!S.booksSeen[b]) return { label: 'Look', fn: () => choice(`The ${t} book looks interesting here. Do you want to read it?`, ['Yes', 'No'], i => { S.booksSeen[b] = true; save(); if (i === 0) openBook(b); }) };
     return { label: `Read ${t}`, fn: () => openBook(b) };
   },
-  webAct: () => G.count('silk') < 3 ? { label: 'Gather spider silk', fn: () => { G.give('silk'); } } : { label: 'Look at the web', fn: () => say(['An old, empty web, glittering with dew.']) },
+  webAct: () => G.count('silk') < G.cap('silk') ? { label: 'Gather spider silk', fn: () => { G.give('silk'); } } : { label: 'Look at the web', fn: () => say(['An old, empty web, glittering with dew.']) },
   buildBridge() {
     G.take('planks', 4); G.take('nails', 4); S.flags.bridgeBuilt = true; save(); chime(2); burst(6, 13.5, '#d8b88a', 24);
     say(['You lay the new planks across the gap and nail them down, tap tap tap.', 'It looks like a bridge again... but it wobbles. It needs mending to be safe.']);
@@ -175,7 +200,7 @@ const G = {
 };
 
 // ================================================================ zones
-function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank, ZONES.library); }
+function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank, ZONES.library, ZONES.crossroads, ZONES.sunnylane, ZONES.keepyard, ZONES.keep); }
 function zoneAt(map, x, y) {
   const list = ZONES[map];
   for (const z of list) { const r = z.rect; if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return z; }
@@ -549,6 +574,10 @@ function kindleBuilding(o) {
     say(['The cube flares in your hand and leaps into the oven. The bricks glow orange, and the fire settles in to stay.',
       'Warm bread smell drifts down the street... and two rabbits hop in from the meadow, tying on aprons as they settle in by the bakery door.',
       'ROSIE: Oh! An oven that never goes cold! Come in, come in. Bring me ingredients and I\'ll bake you something lovely.']);
+  } else if (o.id === 'khearth') {
+    G.setZone('k_kitchen', 0);
+    say(['The cube tumbles into the great hearth and the old logs roar to life. Warmth floods the kitchen, and the gray drains out of the copper pots.']);
+    G.keepCheck();
   } else if (o.id === 'paper') {
     G.setZone('v_paper', 0); spawnCreatures();
     say(['The cube settles into the little drying stove, and warm, dry air rolls through the workshop. The limp sheets on the racks crisp up at once.',
@@ -574,6 +603,13 @@ function mendThing(o) {
     G.setZone('v_leather', 0); spawnCreatures();
     say(['The powder sparkles across the cracked window and the broken door. Glass knits back together, the hinge straightens, and the hex fades away.',
       'A raccoon in a tidy waistcoat strolls up, sniffing. RUFUS: Ah. My shop. Splendid. I work in mushroom leather, if you can find me some tinder fungus.']);
+  } else if (o.id === 'fountain') {
+    G.setZone('sunnylane', 0);
+    say(['The powder sinks into the crack and the stone knits together. With a gurgle, water bubbles up and splashes into the basin.', 'Sunny Lane brightens all at once, as if it remembered what sunshine felt like. Something glints in the clear water.']);
+  } else if (o.id === 'musicbox') {
+    G.setZone('k_ballroom', 0);
+    say(['The cracked lid seals, the bent key straightens... and the music box begins to play a slow, sweet waltz.', 'Color sweeps across the ballroom floor like dancers in a circle. A single glowing feather drifts down to the floor.']);
+    G.keepCheck();
   } else if (o.id === 'brokenbridge') {
     say(['You sprinkle the powder along the new planks. The wood hums, settles, and holds firm.', 'The bridge is whole again. The road west is open!']);
   }
@@ -582,7 +618,7 @@ function visitShop(st) {
   if (st === 'paper') { choice('MARIGOLD: Honk! What can I do for you?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['MARIGOLD: Two bits of dry bark makes three good sheets of paper. Three inkberries, and I\'ll bottle you some proper ink.', 'MARIGOLD: Six sheets, a dab of honey and two strands of spider silk, and I\'ll bind you a book. What you\'ll fill it with, I couldn\'t say. Something magic, no doubt.', 'MARIGOLD: And yes, those are my quills down by the brook. I molt. It happens.']); else if (i === 1) openStation('paper'); }); return; }
   if (st === 'crafts') { choice('TILLY: Oh! Oh my, a customer! Hello!', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['TILLY: Just getting started here. Just opened the shop. Not much available yet, but come back soon and I\'ll have more!', 'TILLY: Today, I only have glass jars. Two apples for one? Lovely for honey, if you can find a bee tree.']); else if (i === 1) openStation('crafts'); }); return; }
   if (st === 'mill') { choice('BARNABY: Hullo! Mind the flour dust.', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['BARNABY: The mill grinds on its own, but I get hungry. Bring me one of Rosie\'s strawberry shortcakes and I\'ll give you three sacks of flour.', 'BARNABY: And for an apple turnover I\'ll cut you a bundle of planks. I\'m very good with wood.']); else if (i === 1) openStation('mill'); }); return; }
-  if (st === 'leather') { choice('RUFUS: Good day. Looking for something fine?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(['RUFUS: Tinder fungus grows on dead trees. Bring me three and one of Rosie\'s berry tarts, and I\'ll make you a proper leather spell pouch. Holds nine.']); else if (i === 1) openStation('leather'); }); return; }
+  if (st === 'leather') { choice('RUFUS: Good day. Looking for something fine?', ['Talk', 'Trade', 'Goodbye'], i => { if (i === 0) say(G.flag('bigPouch') ? ['RUFUS: Four tinder fungus and a berry tart, and I\'ll make you a leather satchel. Carries twice what you can now.'] : ['RUFUS: Tinder fungus grows on dead trees. Bring me three and one of Rosie\'s berry tarts, and I\'ll make you a proper leather spell pouch. Holds nine.', 'RUFUS: After that, I can make you a leather satchel, too.']); else if (i === 1) openStation('leather'); }); return; }
   const talk = {
     bakery: ['ROSIE: Bring me two inkberries and two wild strawberries, and I\'ll bake you a berry tart. Two apples makes a turnover.', 'ROSIE: Everyone in this village has a sweet tooth. Bruno most of all.'],
     smithy: G.flag('macheteGot')
@@ -780,7 +816,7 @@ function smartHint() {
   // the road to town and the village
   if (F('doorOpen') && !S.visited.road) T.push({ map: 'out', x: 0.5, y: 17.5, text: `There's a path west from the yard. The old road leads to ${VILLAGE_NAME}. It's hexed too, poor thing.` });
   if (pg.kindle) {
-    const need = ['bakeryLit', 'smithyLit', 'paperLit'].filter(k => !F(k)).length;
+    const need = ['bakeryLit', 'smithyLit', 'paperLit'].filter(k => !F(k)).length + (F('keepOpen') && !F('keepHearth') ? 1 : 0);
     const have = S.pouch.filter(p => p.type === 'kindlecube').length + G.count('embercube');
     if (need > have) {
       if (has('embercube')) now('Bring me the Ember Cube and choose "Enchant".');
@@ -806,7 +842,7 @@ function smartHint() {
     if (F('chainBird') && !F('chestOpen')) at('chest', 'The songbirds\' clue... brambles beside the library. Your machete can reach whatever is hiding there.');
   }
   if (pg.mend) {
-    const targets = ['millMended', 'leatherMended', 'bridgeMended'].filter(k => !F(k)).length;
+    const targets = ['millMended', 'leatherMended', 'bridgeMended'].filter(k => !F(k)).length + (S.visited.sunnylane && !F('fountainMended') ? 1 : 0) + (F('keepOpen') && !F('musicMended') ? 1 : 0);
     const have = S.pouch.filter(p => p.type === 'mendpowder').length + G.count('paste');
     if (targets > have) {
       if (has('paste')) now('Bring me the Mending Paste and choose "Enchant".');
@@ -831,7 +867,7 @@ function smartHint() {
   if (F('leatherMended') && !F('bigPouch') && G.count('fungus') < 3) T.push({ map: 'road', x: 5.5, y: 4.5, text: 'Rufus needs tinder fungus. Shelf mushrooms grow on the dead trees.' });
   if (F('frogsSang') && (!F('islandWisp') || !F('pearlTaken'))) at('islandwisp', 'The frogs\' clue... lily pads in the pond. Hop across to the island!');
   // never point at places you can't reach yet
-  const reachable = (m) => m === null || m !== 'westbank' || F('bridgeMended');
+  const reachable = (m) => m === null || (m !== 'westbank' || F('bridgeMended')) && (m !== 'keep' || F('keepOpen')) && (!['crossroads', 'sunnylane', 'keepyard'].includes(m) || S.visited[m]);
   for (let i = T.length - 1; i >= 0; i--) if (!reachable(T[i].map)) T.splice(i, 1);
   if (S.visited.village && !F('libOpen')) at('library', 'The Owl\'s Library door has a picture puzzle on it. Swap the little squares until the picture is whole.');
   if (S.visited.village && !F('craftsDoor')) at('crafts', 'The craft shop\'s lock is a puzzle of rings and rods. Turn the tiles until every line connects.');
@@ -839,6 +875,20 @@ function smartHint() {
   if (F('craftsOpen') && !has('jar')) at('crafts', 'Tilly trades glass jars for apples.');
   if (has('jar') && !has('honey') && F('bridgeMended')) at('beetree', 'There\'s a bee tree in Willow Bend. With a jar, you could collect honey.');
   if (F('libOpen') && Object.keys(S.booksSeen).length < 4) at('shelf1', 'Have you looked at the books in the Owl\'s Library?');
+  if (F('craftsOpen') && !S.visited.crossroads) T.push({ map: 'village', x: 20, y: 26.5, text: 'The road south of town, past the bridge, goes down to the old Crossroads.' });
+  if (S.visited.crossroads && !F('signpostSolved')) at('signpost4', 'That signpost at the Crossroads is all spun around. Something rattles inside it. Point each arm the right way!');
+  if (S.visited.sunnylane && !F('fountainMended')) at('fountain', 'The fountain on Sunny Lane is cracked. Mend Powder would fix it.');
+  if (S.visited.keepyard && !F('keepOpen')) {
+    const left = ['statue1', 'statue2', 'statue3', 'statue4'].filter(id => !S.statues[id]);
+    if (left.length) { if (has('machete')) at(left[0], 'Those statues in front of the Keep are hiding something under all those vines.'); }
+    else at('keepx', 'The statues each hold a symbol and a number. The door has four numbered slots...');
+    if (!S.visited.keepfront) T.push({ map: 'keepyard', x: 25.5, y: 7.5, text: 'The way round to the Keep\'s front door is blocked by brambles on the east side.' });
+  }
+  if (F('keepOpen') && !F('keepAwake')) {
+    if (!F('keepHearth')) at('khearth', 'That kitchen hearth in the Keep needs a fire that never goes out.');
+    if (!F('chandLit')) at('chandelier', 'The Keep\'s dining room is so dim. Bring some light!');
+    if (!F('musicMended')) at('musicbox', 'The ballroom\'s music box is broken. Could Mend fix it?');
+  }
   if (!T.length) return ['FENNEL: Explore! Watch for shimmers and glows. Something is always hiding.', 'FENNEL: And bring me treats from your travels. Kindness makes my magic stronger.'];
   const fp = fennelPos();
   const dist = (t) => (t.pri ? -100 : 0) + (t.map === null ? -1 : t.map === S.map ? Math.hypot(t.x - S.px, t.y - S.py) : 60 + Math.hypot(t.x - fp.x, t.y - fp.y));
@@ -920,11 +970,11 @@ function findActs() {
     const d = Math.hypot(S.px - clamp(S.px, tx, tx + 1), S.py - clamp(S.py, ty, ty + 1));
     if (d >= 0.95) continue;
     let a;
-    if (c === 'P') a = G.count('resin') < 3 ? { label: 'Collect pine resin', fn: () => G.give('resin') } : { label: 'Look at the pine', fn: () => say(['A tall pine. Sticky resin beads on its bark.']) };
+    if (c === 'P') a = G.count('resin') < G.cap('resin') ? { label: 'Collect pine resin', fn: () => G.give('resin') } : { label: 'Look at the pine', fn: () => say(['A tall pine. Sticky resin beads on its bark.']) };
     else if (c === 'K') {
       const opts = [];
-      if (G.count('bark') < 3) opts.push(['Peel some dry bark', () => G.give('bark')]);
-      if (G.count('fungus') < 3) opts.push(['Pick a tinder fungus', () => G.give('fungus')]);
+      if (G.count('bark') < G.cap('bark')) opts.push(['Peel some dry bark', () => G.give('bark')]);
+      if (G.count('fungus') < G.cap('fungus')) opts.push(['Pick a tinder fungus', () => G.give('fungus')]);
       a = !opts.length ? { label: 'Look at the dead tree', fn: () => say(['A long-dead tree, its bark dry and papery. Shelf mushrooms grow in its cracks.']) }
         : opts.length === 1 ? { label: opts[0][0], fn: opts[0][1] }
         : { label: 'Gather from the dead tree', fn: () => choice('A long-dead tree. Dry bark, and shelf mushrooms in the cracks.', opts.map(o => o[0]).concat(['Never mind']), i => { if (i < opts.length) opts[i][1](); }) };
@@ -1159,6 +1209,12 @@ function make(id, backTo) {
   if (!Object.keys(r.needs).every(k => G.has(k, r.needs[k]))) return;
   if (r.station === 'fairy' && (S.favor || 0) < 1) { closePanel(); say(fennelTired()); return; }
   if (r.spell && S.pouch.length >= (S.pouchMax || 6)) { closePanel(); say(['Your pouch is full.']); return; }
+  if (r.special === 'satchel') {
+    Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
+    S.flags.bigSatchel = true; save(); closePanel(); chime(3);
+    say(['Rufus cuts and stitches a roomy satchel from the mushroom leather, with a stout strap and a brass buckle.', 'RUFUS: Room for twice as much. Apples, berries, stones, whatever you like.', '🎒 You can now carry twice as much of everything you gather.']);
+    return;
+  }
   if (r.special === 'bigpouch') {
     Object.keys(r.needs).forEach(k => G.take(k, r.needs[k]));
     S.flags.bigPouch = true; S.pouchMax = 9; save(); closePanel(); chime(3);
@@ -1265,9 +1321,18 @@ function puzzleTap(cx, cy) {
   if (PZ.kind === 'swap') {
     if (PZ.sel < 0) { PZ.sel = i; blip(900); }
     else { const a = S.puz.swap; [a[PZ.sel], a[i]] = [a[i], a[PZ.sel]]; PZ.sel = -1; blip(1200); save(); }
-  } else { S.puz.pipes.r[i] = (S.puz.pipes.r[i] + 1) % 4; blip(700 + (i % 6) * 60); save(); }
+  } else {
+    S.puz.pipes.r[i] = (S.puz.pipes.r[i] + 1) % 4; blip(700 + (i % 6) * 60); save();
+    PZ.anim = PZ.anim || {}; PZ.anim[i] = performance.now(); animatePuzzle();
+  }
   drawPuzzle();
-  if (puzzleSolved()) setTimeout(puzzleWin, 400);
+  if (puzzleSolved()) setTimeout(puzzleWin, PZ.kind === 'pipes' ? 700 : 400);
+}
+// tiles turn smoothly over half a second
+function animatePuzzle() {
+  if (PZ.raf) return;
+  const step = () => { drawPuzzle(); PZ.raf = Object.keys(PZ.anim || {}).length && $('pzc') ? requestAnimationFrame(step) : 0; };
+  PZ.raf = requestAnimationFrame(step);
 }
 function puzzleSolved() {
   if (PZ.kind === 'swap') return S.puz.swap.every((v, i) => v === i);
@@ -1327,14 +1392,79 @@ function drawPuzzle() {
       const bg = x.createLinearGradient(dx, dy, dx + cs, dy + cs); bg.addColorStop(0, '#5a4a3a'); bg.addColorStop(1, '#3a2e26');
       x.fillStyle = bg; x.fillRect(dx, dy, cs, cs); x.strokeStyle = 'rgba(0,0,0,0.4)'; x.strokeRect(dx + 0.5, dy + 0.5, cs - 1, cs - 1);
       const cx = dx + cs / 2, cy = dy + cs / 2;
+      let ang = 0, km = k;
+      const t0 = PZ.anim && PZ.anim[i];
+      if (t0 !== undefined) {
+        const p = (performance.now() - t0) / 500;
+        if (p >= 1) delete PZ.anim[i];
+        else { const e = 1 - Math.pow(1 - p, 3); km = rotMask(P.conn[i], (P.r[i] + 3) % 4); ang = e * Math.PI / 2; }
+      }
+      x.save(); x.translate(cx, cy); x.rotate(ang);
+      // a brass disk under the rods so the turn is easy to see
+      const dg = x.createRadialGradient(-cs * 0.1, -cs * 0.1, cs * 0.05, 0, 0, cs * 0.44);
+      dg.addColorStop(0, 'rgba(150,120,80,0.55)'); dg.addColorStop(1, 'rgba(90,70,50,0.35)');
+      x.fillStyle = dg; x.beginPath(); x.arc(0, 0, cs * 0.44, 0, 7); x.fill();
+      x.strokeStyle = 'rgba(230,200,140,0.35)'; x.lineWidth = 1.5; x.beginPath(); x.arc(0, 0, cs * 0.44, 0, 7); x.stroke();
+      x.fillStyle = 'rgba(230,200,140,0.6)'; x.beginPath(); x.arc(cs * 0.33, -cs * 0.33, cs * 0.025, 0, 7); x.fill();
       x.lineCap = 'round'; x.strokeStyle = solved ? '#ffe39a' : '#d8a84a'; x.lineWidth = cs * 0.14;
-      [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (k & b) { x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + ux * cs / 2, cy + uy * cs / 2); x.stroke(); } });
-      x.strokeStyle = '#f0d080'; x.lineWidth = cs * 0.045; [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (k & b) { x.beginPath(); x.moveTo(cx + ux * cs * 0.1, cy + uy * cs * 0.1); x.lineTo(cx + ux * cs / 2, cy + uy * cs / 2); x.stroke(); } });
-      const deg = [1, 2, 4, 8].filter(b => k & b).length;
-      x.strokeStyle = solved ? '#fff2b0' : '#e8c060'; x.lineWidth = cs * 0.07; x.beginPath(); x.arc(cx, cy, cs * (deg === 1 ? 0.2 : 0.13), 0, 7); x.stroke();
-      x.fillStyle = '#3a2e26'; x.beginPath(); x.arc(cx, cy, cs * (deg === 1 ? 0.15 : 0.08), 0, 7); x.fill();
+      [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (km & b) { x.beginPath(); x.moveTo(0, 0); x.lineTo(ux * cs / 2, uy * cs / 2); x.stroke(); } });
+      x.strokeStyle = '#f0d080'; x.lineWidth = cs * 0.045; [[1, 0, -1], [2, 1, 0], [4, 0, 1], [8, -1, 0]].forEach(([b, ux, uy]) => { if (km & b) { x.beginPath(); x.moveTo(ux * cs * 0.1, uy * cs * 0.1); x.lineTo(ux * cs / 2, uy * cs / 2); x.stroke(); } });
+      const deg = [1, 2, 4, 8].filter(b => km & b).length;
+      x.strokeStyle = solved ? '#fff2b0' : '#e8c060'; x.lineWidth = cs * 0.07; x.beginPath(); x.arc(0, 0, cs * (deg === 1 ? 0.2 : 0.13), 0, 7); x.stroke();
+      x.fillStyle = '#3a2e26'; x.beginPath(); x.arc(0, 0, cs * (deg === 1 ? 0.15 : 0.08), 0, 7); x.fill();
+      x.restore();
     }
   }
+}
+
+// ---------------------------------------------------------------- symbol images, signpost, door seal
+const _symImgs = {};
+function symImg(k) {
+  if (_symImgs[k]) return _symImgs[k];
+  const im = new Image();
+  im.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">${SYM[k]}</svg>`);
+  return (_symImgs[k] = im);
+}
+const SIGN_PLACES = ['Thistledown', 'The Keep', 'Fairy Woods', 'The Quarry'];
+const SIGN_DIRS = [['North', 0], ['East', 2], ['South', 3], ['West', 1]];   // correct place index for each arm
+function openSignpost() {
+  S.puz.sign = S.puz.sign || [2, 3, 0, 1];
+  const draw = () => {
+    $('ptitle').textContent = '🪧 The Old Signpost';
+    $('pbody').innerHTML = '<p class="muted small">Tap an arm to turn it to the next place. Point each place the right way.</p>' +
+      '<div class="signgrid">' + SIGN_DIRS.map(([d], i) => `<div class="signarm a${i}"><div class="dir">${d}</div><button data-arm="${i}">${SIGN_PLACES[S.puz.sign[i]]} ${['⬆', '➡', '⬇', '⬅'][i]}</button></div>`).join('') + '<div class="signpole"></div></div>' +
+      '<button class="wide" id="sgdone">Step back</button>';
+    $('pbody').querySelectorAll('[data-arm]').forEach(b => b.addEventListener('click', e => {
+      e.stopPropagation(); const i = +b.dataset.arm; S.puz.sign[i] = (S.puz.sign[i] + 1) % 4; blip(800 + i * 120); save();
+      if (SIGN_DIRS.every(([, c], k) => S.puz.sign[k] === c)) { closePanel(); S.flags.signpostSolved = true; save(); chime(4); burst(17.5, 7.5, '#fff3b0', 30); G.give('compass'); G.curio('compass'); say(['With the last arm pointing true, there\'s a click, and a little door pops open in the post.']); }
+      else draw();
+    }));
+    $('sgdone').addEventListener('click', e => { e.stopPropagation(); closePanel(); });
+  };
+  draw();
+  $('panel').classList.add('show');
+}
+const SEAL_SYMS = ['knot', 'eye', 'wave', 'spiral', 'branch', 'moon'];
+const SEAL_ANSWER = ['wave', 'knot', 'moon', 'branch'];
+function openSeal() {
+  S.puz.seal = S.puz.seal || [1, 3, 1, 5];
+  const draw = () => {
+    $('ptitle').textContent = '🏰 The Sealed Door';
+    $('pbody').innerHTML = '<p class="muted small">Four numbered slots, each showing a symbol. Tap a slot to turn it.</p><div class="seal">' +
+      ['I', 'II', 'III', 'IV'].map((n, i) => `<div class="slot"><div class="num">${n}</div><button data-slot="${i}"><img src="${symImg(SEAL_SYMS[S.puz.seal[i]]).src}" width="56" height="56"></button></div>`).join('') +
+      '</div><button class="wide" id="slpush">Press the door</button><br><button class="wide" id="sldone" style="margin-top:8px">Step back</button>';
+    $('pbody').querySelectorAll('[data-slot]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); const i = +b.dataset.slot; S.puz.seal[i] = (S.puz.seal[i] + 1) % 6; blip(700 + i * 150); save(); draw(); }));
+    $('slpush').addEventListener('click', e => {
+      e.stopPropagation();
+      if (SEAL_ANSWER.every((k, i) => SEAL_SYMS[S.puz.seal[i]] === k)) {
+        closePanel(); S.flags.keepOpen = true; G.setZone('keepyard', 0); save(); chime(4); burst(15, 10, '#e6e6ff', 40);
+        say(['The four symbols glow, one after another: I, II, III, IV. The ring of gray light around the door cracks... and shatters into sparkles.', 'The great door of the Keep swings slowly open.']);
+      } else { blip(300); toast('The seal hums, but nothing happens.'); }
+    });
+    $('sldone').addEventListener('click', e => { e.stopPropagation(); closePanel(); });
+  };
+  draw();
+  $('panel').classList.add('show');
 }
 
 // ---------------------------------------------------------------- reading library books
@@ -1456,6 +1586,7 @@ function update(dt) {
   updateCreatures(dt);
   updateChain(dt);
   edgeExits();
+  if (S.map === 'keepyard' && S.py > 12 && !S.visited.keepfront) S.visited.keepfront = true;
   particles.forEach(p => { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.94; p.vy *= 0.94; p.life -= dt; });
   particles = particles.filter(p => p.life > 0);
   // zone entry
@@ -1466,15 +1597,29 @@ function update(dt) {
   refreshHud();
   saveT += dt; if (saveT > 5) { saveT = 0; save(); }
 }
+// map edges that lead somewhere: [from, edge, min, max (along the edge), to, x, y]
+const EXITS = [
+  ['out', 'W', 0, 99, 'road', -0.9, 8.5], ['road', 'E', 0, 99, 'out', 0.9, 17.5],
+  ['road', 'W', 0, 99, 'village', -0.9, 25.5], ['village', 'E', 0, 99, 'road', 0.9, 8.5],
+  ['village', 'W', 0, 99, 'westbank', -0.9, 13.5], ['westbank', 'E', 0, 99, 'village', 0.9, 13.5],
+  ['village', 'S', 17, 23, 'crossroads', 15.5, 0.9], ['crossroads', 'N', 13, 18, 'village', 19.5, -0.9],
+  ['crossroads', 'W', 0, 99, 'sunnylane', -0.9, 11.5], ['sunnylane', 'E', 0, 99, 'crossroads', 0.9, 10.5],
+  ['westbank', 'S', 10, 15, 'sunnylane', 8.5, 0.9], ['sunnylane', 'N', 6, 11, 'westbank', 12.5, -0.9],
+  ['sunnylane', 'S', 13, 18, 'keepyard', 15.5, 0.9], ['keepyard', 'N', 13, 18, 'sunnylane', 15.5, -0.9],
+];
 function edgeExits() {
   if (fadeDir || paused) return;
   const m = MAPS[S.map];
-  if (S.map === 'out' && S.px < 0.45) G.goMap('road', MAPS.road.w - 0.9, 8.5);
-  else if (S.map === 'road' && S.px > m.w - 0.45) G.goMap('out', 0.9, 17.5);
-  else if (S.map === 'road' && S.px < 0.45) G.goMap('village', MAPS.village.w - 0.9, 25.5);
-  else if (S.map === 'village' && S.px > m.w - 0.45) G.goMap('road', 0.9, 8.5);
-  else if (S.map === 'village' && S.px < 0.45) G.goMap('westbank', MAPS.westbank.w - 0.9, 13.5);
-  else if (S.map === 'westbank' && S.px > m.w - 0.45) G.goMap('village', 0.9, 13.5);
+  for (const [from, edge, a, b, to, x, y] of EXITS) {
+    if (from !== S.map) continue;
+    const along = edge === 'N' || edge === 'S' ? S.px : S.py;
+    if (along < a || along > b) continue;
+    const hit = edge === 'W' ? S.px < 0.45 : edge === 'E' ? S.px > m.w - 0.45 : edge === 'N' ? S.py < 0.45 : S.py > m.h - 0.45;
+    if (!hit) continue;
+    const t = MAPS[to];   // negative coordinates count from the far edge
+    G.goMap(to, x < 0 ? t.w + x : x, y < 0 ? t.h + y : y);
+    return;
+  }
 }
 function updateFairy(dt) {
   if (!OUTDOOR.includes(S.map) || !G.flag('fairyFree')) return;
@@ -1696,6 +1841,25 @@ function drawTile(m, tx, ty, x, y, g, t) {
       break;
     }
     case ',': case 'T': case 'B': case 'H': case 'K': case 't': case 'P': drawGrass(x, y, g, tx, ty); break;
+    case 'S': {
+      ctx.fillStyle = C('#8f8a96', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.strokeStyle = C('#6f6a78', g); ctx.lineWidth = 1.5;
+      for (let r = 0; r < 3; r++) { const yy = y + r * TS / 3; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + TS, yy); ctx.stroke(); const off = (r + tx) % 2 ? TS / 2 : 0; ctx.beginPath(); ctx.moveTo(x + off + TS / 4, yy); ctx.lineTo(x + off + TS / 4, yy + TS / 3); ctx.stroke(); }
+      if (m.rows[ty + 1] && m.rows[ty + 1][tx] !== 'S') { ctx.fillStyle = C('#6f6a78', g); ctx.fillRect(x, y + TS - 5, TS + 1, 5); }
+      break;
+    }
+    case '_': {
+      ctx.fillStyle = C((tx + ty) % 2 ? '#d8d2c6' : '#c8c0b2', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.strokeStyle = C('#b0a898', g); ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, TS, TS);
+      break;
+    }
+    case 'r': {
+      ctx.fillStyle = C('#a8344a', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.fillStyle = C('#e7c36a', g);
+      const l = m.rows[ty][tx - 1] !== 'r', rt = m.rows[ty][tx + 1] !== 'r';
+      if (l) ctx.fillRect(x + 2, y, 3, TS + 1); if (rt) ctx.fillRect(x + TS - 5, y, 3, TS + 1);
+      break;
+    }
     case 'L': {
       ctx.fillStyle = C('#86c8ea', g); ctx.fillRect(x, y, TS + 1, TS + 1);
       ctx.strokeStyle = C('#b8e2f7', g); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + TS * 0.15, y + TS * 0.3); ctx.quadraticCurveTo(x + TS * 0.35, y + TS * 0.2, x + TS * 0.55, y + TS * 0.3); ctx.stroke();
@@ -2098,6 +2262,96 @@ const DRAW = {
     ctx.fillStyle = '#e8b84a'; ctx.beginPath(); ctx.ellipse(x + w * 0.52, y + h * 0.2, w * 0.06, h * 0.06, 0, 0, 7); ctx.fill();
     for (let i = 0; i < 4; i++) { const a = t * 3 + i * 1.6; const bx = x + w * 0.52 + Math.cos(a) * w * 0.35, by = y + h * 0.1 + Math.sin(a * 1.3) * h * 0.25; ctx.fillStyle = '#f0c43a'; circ(bx, by, 2.5); ctx.fill(); ctx.fillStyle = '#222'; ctx.fillRect(bx - 1, by - 2.5, 1.5, 5); }
   },
+  signpost4(o, x, y, w, h, g) {
+    const ok = G.flag('signpostSolved');
+    ctx.fillStyle = C('#7a543b', g); ctx.fillRect(x + w * 0.44, y - h * 1.1, w * 0.12, h * 2);
+    const arms = ok ? [[0, -1], [1, 0], [0, 1], [-1, 0]] : [[0.7, -0.7], [0.9, 0.4], [-0.6, 0.8], [-1, -0.2]];
+    arms.forEach(([dx, dy], i) => { ctx.save(); ctx.translate(x + w / 2, y - h * (0.9 - i * 0.18)); ctx.rotate(Math.atan2(dy, dx) * (ok ? 1 : 1)); ctx.fillStyle = C(['#b5835d', '#a7794f', '#c99a6e', '#9a6c42'][i], g); ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(w * 0.55, -4); ctx.lineTo(w * 0.68, 0); ctx.lineTo(w * 0.55, 4); ctx.lineTo(0, 4); ctx.fill(); ctx.restore(); });
+  },
+  veil(o, x, y, w, h, g, t) {
+    for (let i = 0; i < 6; i++) { const k = (t * 0.3 + i / 6) % 1; ctx.fillStyle = `hsla(${(t * 40 + i * 50) % 360},80%,80%,${0.25 * Math.sin(k * Math.PI)})`; ctx.beginPath(); ctx.ellipse(x + w * 0.5 + Math.sin(t + i) * w * 0.3, y + h * k, w * 0.6, h * 0.12, 0, 0, 7); ctx.fill(); }
+    if (Math.sin(t * 3) > 0.6) star(x + w * 0.5, y + h * ((t * 0.2) % 1), TS * 0.08, 'rgba(255,255,240,0.9)');
+  },
+  rockslide(o, x, y, w, h, g) {
+    [[0.15, 0.6, 0.22], [0.4, 0.35, 0.28], [0.7, 0.55, 0.25], [0.3, 0.8, 0.2], [0.85, 0.25, 0.18], [0.55, 0.85, 0.18]].forEach(([a, b, r]) => {
+      const rg = ctx.createRadialGradient(x + w * a - w * r * 0.3, y + h * b - h * r * 0.4, 2, x + w * a, y + h * b, w * r);
+      rg.addColorStop(0, C('#d6d1c8', g)); rg.addColorStop(1, C('#77716a', g)); ctx.fillStyle = rg; circ(x + w * a, y + h * b, w * r); ctx.fill(); });
+  },
+  fountain(o, x, y, w, h, g, t) {
+    const ok = G.flag('fountainMended');
+    ctx.fillStyle = C('#b8b2a8', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.6, w * 0.48, h * 0.36, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = ok ? C('#86c8ea', g) : C('#8a847b', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.58, w * 0.38, h * 0.26, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#cfcabd', g); ctx.fillRect(x + w * 0.45, y + h * 0.05, w * 0.1, h * 0.5); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.1, w * 0.16, h * 0.06, 0, 0, 7); ctx.fill();
+    if (ok) { for (let i = 0; i < 6; i++) { const k = (t * 1.5 + i / 6) % 1; ctx.fillStyle = `rgba(200,235,255,${0.8 * (1 - k)})`; circ(x + w / 2 + Math.cos(i) * w * 0.2 * k, y + h * 0.08 + k * k * h * 0.4, 2.5); ctx.fill(); } }
+    else { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x + w * 0.3, y + h * 0.35); ctx.lineTo(x + w * 0.45, y + h * 0.6); ctx.lineTo(x + w * 0.38, y + h * 0.9); ctx.stroke(); }
+    if (ok && !G.flag('coinTaken') && Math.sin(t * 3) > 0.3) star(x + w * 0.62, y + h * 0.6, TS * 0.07, 'rgba(255,255,230,0.9)');
+  },
+  lamppost(o, x, y, w, h, g) {
+    const lit = G.flag('fountainMended');
+    ctx.fillStyle = C('#3a3a42', g); ctx.fillRect(x + w * 0.46, y - h * 0.8, w * 0.08, h * 1.7);
+    ctx.fillStyle = lit ? '#ffe39a' : C('#8a8a96', g); rr(x + w * 0.34, y - h * 1.0, w * 0.32, h * 0.3, 4); ctx.fill();
+    if (lit) { const gl = ctx.createRadialGradient(x + w / 2, y - h * 0.85, 0, x + w / 2, y - h * 0.85, TS * 0.6); gl.addColorStop(0, 'rgba(255,215,120,0.5)'); gl.addColorStop(1, 'rgba(255,215,120,0)'); ctx.fillStyle = gl; circ(x + w / 2, y - h * 0.85, TS * 0.6); ctx.fill(); }
+  },
+  keepx(o, x, y, w, h, g, t) {
+    const open = G.flag('keepOpen'), gg = open ? g : 1;
+    ctx.fillStyle = 'rgba(30,40,30,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h - 2, w * 0.55, h * 0.06, 0, 0, 7); ctx.fill();
+    const wall = (wx, wy, ww, wh) => { const sg = ctx.createLinearGradient(wx, 0, wx + ww, 0); sg.addColorStop(0, C('#b8b2be', gg)); sg.addColorStop(1, C('#7f7a88', gg)); ctx.fillStyle = sg; ctx.fillRect(wx, wy, ww, wh);
+      ctx.strokeStyle = C('#6f6a78', gg, 0.6); ctx.lineWidth = 1; for (let r = wy + 10; r < wy + wh; r += 12) { ctx.beginPath(); ctx.moveTo(wx, r); ctx.lineTo(wx + ww, r); ctx.stroke(); }
+      for (let cx = wx; cx < wx + ww - 4; cx += 14) { ctx.fillStyle = C('#9a95a4', gg); ctx.fillRect(cx, wy - 8, 9, 8); } };
+    wall(x + w * 0.12, y - h * 0.05, w * 0.76, h * 1.05);
+    wall(x, y - h * 0.3, w * 0.2, h * 1.3); wall(x + w * 0.8, y - h * 0.3, w * 0.2, h * 1.3);
+    wall(x + w * 0.38, y - h * 0.45, w * 0.24, h * 0.5);
+    [[0.1, '#5b6aa8'], [0.9, '#a0566b']].forEach(([a, c]) => { ctx.fillStyle = C(c, gg); ctx.beginPath(); ctx.moveTo(x + w * a, y - h * 0.62); ctx.lineTo(x + w * (a + 0.06), y - h * 0.55); ctx.lineTo(x + w * a, y - h * 0.48); ctx.fill(); ctx.fillStyle = C('#3a3a42', gg); ctx.fillRect(x + w * a - 1, y - h * 0.62, 2, h * 0.3); });
+    for (let i = 0; i < 4; i++) { const wx = x + w * (0.2 + i * 0.18); ctx.fillStyle = open ? C('#ffe9a8', g) : '#2a2632'; rr(wx, y + h * 0.25, w * 0.05, h * 0.16, 6); ctx.fill(); }
+    ctx.fillStyle = C('#4e3220', gg); rr(x + w * 0.43, y + h * 0.58, w * 0.14, h * 0.42, 14); ctx.fill();
+    ctx.fillStyle = open ? '#2a201c' : C('#7a543b', gg); rr(x + w * 0.445, y + h * 0.61, w * 0.11, h * 0.39, 12); ctx.fill();
+    if (!open) { const k = 0.5 + 0.5 * Math.sin(t * 2); ctx.strokeStyle = `rgba(200,200,215,${0.4 + 0.3 * k})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x + w / 2, y + h * 0.8, w * 0.1, 0, 7); ctx.stroke();
+      for (let i = 0; i < 5; i++) { const k2 = (t * 0.2 + i / 5) % 1; ctx.fillStyle = `rgba(150,110,210,${0.3 * Math.sin(k2 * Math.PI)})`; circ(x + w * (0.15 + i * 0.18), y + h * (1 - k2 * 1.2), TS * 0.3); ctx.fill(); } }
+  },
+  statue(o, x, y, w, h, g) {
+    const clear = S.statues[o.id];
+    ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.9, w * 0.4, h * 0.1, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#9d9aa8', clear ? 0 : 1); rr(x + w * 0.2, y + h * 0.55, w * 0.6, h * 0.38, 3); ctx.fill();
+    ctx.fillStyle = C('#b9b6c4', clear ? 0 : 1); rr(x + w * 0.3, y - h * 0.4, w * 0.4, h * 1.0, 8); ctx.fill(); circ(x + w / 2, y - h * 0.5, w * 0.17); ctx.fill();
+    if (clear) { ctx.fillStyle = '#e8e4da'; rr(x + w * 0.22, y - h * 0.15, w * 0.56, h * 0.5, 3); ctx.fill(); const im = symImg(o.sym); if (im.complete) ctx.drawImage(im, x + w * 0.27, y - h * 0.13, w * 0.46, h * 0.46);
+      ctx.fillStyle = '#3b2f2a'; ctx.font = `bold ${Math.round(TS * 0.22)}px Georgia`; ctx.textAlign = 'center'; ctx.fillText(o.num, x + w / 2, y + h * 0.82); }
+    else { ctx.strokeStyle = '#4a6a42'; ctx.lineWidth = 3; for (let i = 0; i < 7; i++) { ctx.beginPath(); const sx0 = x + w * (0.2 + i * 0.1); ctx.moveTo(sx0, y + h); ctx.bezierCurveTo(sx0 + 8, y + h * 0.4, sx0 - 10, y, sx0 + 4, y - h * 0.6); ctx.stroke(); }
+      ctx.fillStyle = '#5c7f52'; for (let i = 0; i < 16; i++) { ctx.beginPath(); ctx.ellipse(x + w * (0.2 + hash(i, o.tx) * 0.6), y + h * (0.9 - hash(o.ty, i) * 1.5), 4, 2.5, i, 0, 7); ctx.fill(); } }
+  },
+  kstairs(o, x, y, w, h, g) {
+    for (let i = 0; i < 6; i++) { const k = o.up ? i : 5 - i; ctx.fillStyle = C(o.up ? '#a8344a' : '#5a4a44', g * 0.5 + (o.up ? 0 : 0.3)); ctx.fillRect(x + 4, y + i * h / 6, w - 8, h / 6 - 2); ctx.fillStyle = `rgba(255,255,255,${0.05 + k * 0.03})`; ctx.fillRect(x + 4, y + i * h / 6, w - 8, 3); }
+    ctx.fillStyle = C('#5f412d', g); ctx.fillRect(x, y, 4, h); ctx.fillRect(x + w - 4, y, 4, h);
+    if (o.up) { const k = 0.4 + 0.3 * Math.sin(Date.now() / 400); ctx.fillStyle = `rgba(200,200,220,${G.flag('keepAwake') ? k * 0.4 : k})`; ctx.fillRect(x + 2, y + h * 0.75, w - 4, h * 0.12); }
+    else { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; for (let i = 1; i < 6; i++) { ctx.beginPath(); ctx.moveTo(x + i * w / 6, y + h * 0.7); ctx.lineTo(x + i * w / 6, y + h * 0.95); ctx.stroke(); } ctx.beginPath(); ctx.moveTo(x + 4, y + h * 0.7); ctx.lineTo(x + w - 4, y + h * 0.7); ctx.stroke(); }
+    ctx.font = `bold ${Math.round(TS * 0.3)}px sans-serif`; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillText(o.up ? '⬆' : '⬇', x + w / 2, y + h * 0.45);
+  },
+  khearth(o, x, y, w, h, g, t) {
+    ctx.fillStyle = C('#8f8a96', g); rr(x, y - h * 0.4, w, h * 1.35, 6); ctx.fill();
+    ctx.fillStyle = '#2a2420'; rr(x + w * 0.15, y - h * 0.1, w * 0.7, h * 0.95, 10); ctx.fill();
+    if (G.flag('keepHearth')) { const f = 0.8 + 0.2 * Math.sin(t * 9); ctx.fillStyle = '#ff9a3c'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.6, w * 0.22 * f, h * 0.3 * f, 0, 0, 7); ctx.fill(); ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.66, w * 0.1 * f, h * 0.16 * f, 0, 0, 7); ctx.fill(); }
+    ctx.fillStyle = C('#b87a4a', g); circ(x + w * 0.3, y - h * 0.2, TS * 0.12); ctx.fill(); circ(x + w * 0.7, y - h * 0.2, TS * 0.1); ctx.fill();
+  },
+  ktable(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#6a4a32', g); rr(x, y + 4, w, h - 6, 6); ctx.fill();
+    ctx.fillStyle = C('#e8e0cc', g); rr(x + 6, y + 8, w - 12, h - 16, 4); ctx.fill();
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = C('#c8c0b2', g); circ(x + w * (0.1 + i * 0.16), y + h * 0.5, TS * 0.12); ctx.fill(); }
+    if (G.flag('chandLit') && !G.flag('gobletTaken')) { ctx.fillStyle = '#d8dce4'; ctx.fillRect(x + w * 0.48, y + h * 0.25, 6, 12); star(x + w * 0.52, y + h * 0.2, TS * 0.07, 'rgba(255,255,230,0.9)'); }
+  },
+  chandelier(o, x, y, w, h, g, t) {
+    const lit = G.flag('chandLit'), cx = x + w / 2, cy = y - h * 0.6;
+    ctx.strokeStyle = '#3a3a42'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, w * 0.9, h * 0.3, 0, 0, 7); ctx.stroke();
+    for (let i = 0; i < 6; i++) { const a = i * 1.047, px = cx + Math.cos(a) * w * 0.9, py = cy + Math.sin(a) * h * 0.3; ctx.fillStyle = '#e8e4da'; ctx.fillRect(px - 2, py - 8, 4, 8);
+      if (lit) { ctx.fillStyle = '#ffd27a'; ctx.beginPath(); ctx.ellipse(px, py - 11, 2.5, 4 + Math.sin(t * 8 + i), 0, 0, 7); ctx.fill(); } }
+    if (lit) { const gl = ctx.createRadialGradient(cx, cy, 0, cx, cy, TS * 2.2); gl.addColorStop(0, 'rgba(255,220,140,0.25)'); gl.addColorStop(1, 'rgba(255,220,140,0)'); ctx.fillStyle = gl; circ(cx, cy, TS * 2.2); ctx.fill(); }
+  },
+  musicbox(o, x, y, w, h, g, t) {
+    const ok = G.flag('musicMended');
+    ctx.fillStyle = C('#8f8a96', g); ctx.fillRect(x + w * 0.3, y + h * 0.3, w * 0.4, h * 0.65);
+    ctx.fillStyle = C('#d8dce4', g); rr(x + w * 0.15, y + h * 0.05, w * 0.7, h * 0.3, 4); ctx.fill();
+    ctx.fillStyle = C('#b0b6c4', g); rr(x + w * 0.15, ok ? y - h * 0.15 : y - h * 0.02, w * 0.7, h * 0.1, 3); ctx.fill();
+    if (ok) for (let i = 0; i < 3; i++) { const k = (t * 0.5 + i / 3) % 1; ctx.fillStyle = `rgba(90,60,140,${1 - k})`; ctx.font = `${Math.round(TS * 0.3)}px serif`; ctx.textAlign = 'center'; ctx.fillText('♪', x + w * (0.3 + i * 0.25) + Math.sin(t + i) * 6, y - h * 0.2 - k * h * 0.8); }
+    else { ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + w * 0.3, y + h * 0.05); ctx.lineTo(x + w * 0.45, y + h * 0.2); ctx.lineTo(x + w * 0.4, y + h * 0.33); ctx.stroke(); }
+  },
   web(o, x, y, w, h, g) {
     const cx = x + w / 2, cy = y + h * 0.35, r = w * 0.4;
     ctx.strokeStyle = `rgba(240,240,250,${0.75 - g * 0.3})`; ctx.lineWidth = 1;
@@ -2217,6 +2471,13 @@ function drawCreature(c, t) {
     ctx.beginPath(); ctx.moveTo(s * 0.07, -s * 0.12 - hop); ctx.lineTo(s * 0.09, -s * 0.2 - hop); ctx.lineTo(s * 0.12, -s * 0.13 - hop); ctx.fill();
     ctx.fillStyle = '#f3e2c8'; ctx.beginPath(); ctx.ellipse(s * 0.04, s * 0.08 - hop, s * 0.06, s * 0.05, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#222'; circ(s * 0.13, -s * 0.07 - hop, s * 0.016); ctx.fill();
+  } else if (sp === 'hedgehog') {
+    const hop = Math.abs(Math.sin(c.t * 6)) * s * 0.02;
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.18, s * 0.18, s * 0.05, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#6a5040'; ctx.beginPath(); ctx.ellipse(-s * 0.02, s * 0.04 - hop, s * 0.18, s * 0.13, 0, Math.PI, 0); ctx.lineTo(s * 0.16, s * 0.08 - hop); ctx.lineTo(-s * 0.2, s * 0.08 - hop); ctx.fill();
+    ctx.strokeStyle = '#4a382c'; ctx.lineWidth = 1.5; for (let i = 0; i < 9; i++) { const a = Math.PI + i * 0.35; ctx.beginPath(); ctx.moveTo(-s * 0.02 + Math.cos(a) * s * 0.12, s * 0.04 - hop + Math.sin(a) * s * 0.09); ctx.lineTo(-s * 0.02 + Math.cos(a) * s * 0.21, s * 0.04 - hop + Math.sin(a) * s * 0.16); ctx.stroke(); }
+    ctx.fillStyle = '#d8b890'; ctx.beginPath(); ctx.ellipse(s * 0.17, s * 0.04 - hop, s * 0.07, s * 0.05, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#222'; circ(s * 0.23, s * 0.03 - hop, s * 0.018); ctx.fill(); circ(s * 0.16, s * 0.01 - hop, s * 0.012); ctx.fill();
   } else if (sp === 'goose') {
     const bob = Math.sin(c.t * 3) * s * 0.02;
     ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(0, s * 0.24, s * 0.22, s * 0.06, 0, 0, 7); ctx.fill();
@@ -2305,7 +2566,7 @@ function startGame(fresh) {
   if (S.flags.chainChip) { S.flags.chipsInHollow = true; if (!S.clues.find(c => c.id === 'chipmunks')) S.clues.push({ id: 'chipmunks', text: CLUES.chipmunks, done: false }); }
   S.given = S.given || {}; S.cut = S.cut || {}; S.visited = S.visited || {};
   for (const z of allZones()) if (typeof S.zones[z.id] !== 'number') S.zones[z.id] = z.id === 'library' ? 0 : 1;
-  S.booksSeen = S.booksSeen || {}; S.puz = S.puz || {};
+  S.booksSeen = S.booksSeen || {}; S.puz = S.puz || {}; S.statues = S.statues || {};
   if (S.gifts) { if (S.gifts.r1) S.given.honeycake = true; if (S.gifts.r2) S.given.dew = true; if (S.gifts.r3) S.given.button = true; }
   for (const k in S.zones) zoneDisp[k] = S.zones[k];
   rebuildSolids(); spawnCreatures();

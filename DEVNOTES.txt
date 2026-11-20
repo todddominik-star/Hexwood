@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v8 (Nov 16, 2026)
+Current version: v9 (Nov 19, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -492,6 +492,114 @@ NEEDS DESIGN NEXT (Todd to journal):
     formula waiting yet.
 
 
+v9 CHANGES (Nov 19)
+-------------------
+Map: the river now runs across the top of Willow Bend (west to east) and
+into Thistledown; a little stream feeds the Willow Bend pond. Thistledown's
+south road runs past the bridge and down to the CROSSROADS (C4). Willow
+Bend has a gap in the trees on its south side, flanked by shrubs, down to
+SUNNY LANE (C3). Sunny Lane's main road comes up from the Keep (south),
+then turns east to the Crossroads. Map philosophy (Todd): not a jigsaw.
+Screens connect where it feels right; dense trees/rocks mean "go around."
+
+CROSSROADS: two crossing roads. Old signpost puzzle (4 arms spun loose; tap
+each to point the right place: N Thistledown, E Fairy Woods, S The Quarry,
+W The Keep). Clue: the travellers' well has arrows on its rim, and the
+roads themselves. Reward: Brass Compass curio. East: a shimmering fairy
+veil (Fairy Woods, later). South: a rockslide toward the quarries (later,
+see CARRY below). Hedgehog, bunny, butterfly to un-hex.
+
+SUNNY LANE: cracked fountain -> Mend Powder restores the whole screen,
+lights the lampposts, and a Silver Coin is in the basin. Secret (Seeker):
+a locket engraved "Tig" hidden near the north path. Squirrel, purple
+songbird, hedgehog.
+
+THE KEEP GROUNDS: the Keep is sealed in gray light. Four statues wrapped
+in hexed vines (machete). Each holds a symbol and a Roman numeral. The door
+has four numbered slots that cycle the six library symbols:
+I wave, II knot, III moon, IV branch. The east path round to the front is
+blocked by brambles (machete) - you can't slip round the sides.
+
+THE KEEP, GROUND FLOOR: stone walls, stone floor, red carpet.
+  Kitchen: great hearth -> Kindle cube (also a mossy note)
+  Dining room: chandelier -> hold up a Light orb; a silver goblet appears
+  Ballroom: broken music box -> Mend; a Wisp Feather drifts down
+  All three -> the Great Hall wakes. Stairs up (gray light thinning) and
+  stairs down (broken) are for the next build.
+
+Also in v9: craft-shop pipe tiles rotate smoothly (0.5 s). Carry limits
+raised, and Rufus can make a Leather Satchel (4 fungus + a berry tart)
+that doubles every carry limit.
+
+
+CARRY, THE FALLEN LOGS, AND THE OLD STONES (Todd's ideas, Nov 19 - draft)
+-------------------------------------------------------------------------
+Todd: the fallen logs in Thistledown get picked up one at a time with the
+discovered CARRY spell and taken to the mill, where Barnaby carves them
+into building materials and some bigger pieces. Those get enchanted, and
+Carry moves them to where they belong. Example: a carved DOOR carried into
+the Lowlands and set on a pile of rocks by the dense treeline; once
+enchanted and placed, it becomes a passage into the lower mountains.
+Later: a marble ALTAR, enchanted and set in the middle of the Old Stones
+ring ("that ring is begging for something"). Then something new and
+powerful: cast there, assemble there, divination, or a portal.
+
+Claude's thoughts on the bigger picture (for Todd to react to):
+  - This is a strong spine for the middle of the game: "make the world's
+    pieces, then put them in place." It ties the trades (mill, smithy,
+    quarry, leather) to the map, so rebuilding shops actually opens land.
+  - One verb, many uses keeps it from being "too much": Carry lifts a log,
+    a boulder (the Crossroads rockslide!), a door, a statue, an altar.
+    Each placed piece is a small, visible change to the world.
+  - The Old Stones altar feels like the right "big payoff" for the middle
+    of the game. Simplest strong version: it's a WAYSTONE HUB. Every
+    restored region later gets its own small standing stone; at the
+    altar you can travel between them (the teleport idea we parked).
+    That's useful forever, fits "the ring is a gathering place," and
+    isn't odd.
+  - Divination could live there too, quietly: place a curio on the altar
+    and Fennel/the stones show you where the next secret chain is.
+  - "Too odd" test: if it uses magic we've already taught (shapes, writing,
+    restoring color) it fits; brand-new systems (combat, time limits,
+    shops with money) don't.
+
+IDEA BANK: SMALL PUZZLES AND SECRETS
+------------------------------------
+Pick from these whenever a screen feels empty. Most need no new systems.
+Arrangement:
+  - Point things the right way (signposts, statues facing, mirrors)
+  - Match symbols/numbers found elsewhere (statues -> door seal)
+  - Set objects to a sequence heard/seen (bells, music box notes, flowers
+    blooming in order, birds singing in order)
+  - Sliding / swapping / rotating tiles (library swap, craft pipes)
+  - Light the lamps/candles in a pattern (Lights Out style, gentle)
+  - Push or Carry stones onto pressure plates
+Observation:
+  - Something that only appears at night, in rain, or under Light
+  - A painting or map that matches a real spot ("dig where the X is")
+  - Count things (how many windows/columns) for a lock
+  - A creature that always runs to the same spot (it's hiding something)
+  - Shadows that point to a secret at a certain moment
+Spell uses:
+  - Seeker shows a hidden door, footprints, or a buried chest
+  - Kindle lights a beacon visible from another screen
+  - Mend fixes something that then gives a clue (clock, map, statue)
+  - Light reveals invisible writing or scares off a gray mist
+  - Carry moves things to build a bridge, stairs or a dam
+Trading / fetch:
+  - A creature wants an item from far away (lost and found)
+  - A chain of trades (Zelda trading sequence) ending in a curio
+  - Return a lost item to its owner (the "Tig" locket!)
+Secrets:
+  - A bush or wall that's slightly different (secret hedge)
+  - A path behind trees (walking behind the canopy)
+  - A wisp feather hidden in each region
+  - A "collect them all" set: 6 hedgehog buttons, 4 compass points...
+Sources for more: Zelda: Link's Awakening / Minish Cap / Ocarina walkthroughs,
+King's Quest V/VI, Myst & Riven, Monument Valley, The Witness (simple
+panels), Professor Layton (logic puzzles).
+
+
 NEXT UP
 ------------------
   - The critter village (freed creatures move in; rebuild with materials)
@@ -531,6 +639,10 @@ SESSION LOG
             songbird chain.
 2026-11-14  v5 fixes (black ground on old saves, critters walk indoors).
             v6: Mend, Mill, Leather Goods, bridge, Willow Bend, frog chain.
+2026-11-16  v7/v8: renewable quills, Owl's Library, paper workshop, crafts
+  /17       shop, bee tree, world map grid.
+2026-11-19  v9: river + roads, Crossroads, Sunny Lane, the Keep grounds and
+            ground floor, pipe animation, satchel. Idea bank, Carry ideas.
 
 
 TODD'S NOTES
