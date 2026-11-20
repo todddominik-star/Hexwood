@@ -11,7 +11,7 @@ Each cell is one map area ("screen"). "--" = not mapped yet.
   E     --             Lower Purple Mtns  Lowlands       Tig's Hallow    Dark Forest    Western Forest     --               --            --
   D     --             Running Water      Willow Road*   Thistledown     Old Road       Hut & Old Stones   High Point       --            --
   C     --             Archery Yard       Sunny Lane     Crossroads      Fairy Woods    Reflection Pool    North Valley     --            --
-  B     --             Labyrinth          THE KEEP       Western Side    Copper Quarry  Granite Quarry     Rainbow Crossing Sky Bridge    [#2 destination]
+  B     --             Labyrinth          THE KEEP       Western Side    Copper Quarry  Marble Quarry      Rainbow Crossing Sky Bridge    [#2 destination]
   A     --             Gazebo             Game Field     Clay Swamp      ? (uncharted)  Tin Quarry         South Valley     --            --
 
   * "Willow Road" in Todd's notes = the area built as "Willow Bend" (D3).
@@ -72,7 +72,7 @@ B3  THE KEEP: as laid out previously (see DEVNOTES: 5 levels, roof overview,
 B4  Western Side: grassy area next to the keep that may have hosted tents
     for visitors.
 B5  Copper Quarry: copper.
-B6  Granite Quarry: granite.
+B6  Marble Quarry: marble. (Changed from granite, Nov 19.)
 B7  Rainbow Crossing: a magical bridge leads off the cliff edge to the east.
 B8  Sky Bridge: partway across the rainbow crossing; aerial engagement
     without the hero having to fly or float.
@@ -90,9 +90,10 @@ QUESTIONS TO TALK THROUGH LATER (Claude's notes, not decisions)
 ---------------------------------------------------------------
 - Earlier notes put the Keep "two screens south of Willow Bend" (that's B3
   on this grid: D3 -> C3 Sunny Lane -> B3). Matches.
-- Earlier notes listed the quarry as copper / tin / marble / one locked.
-  This map has Copper (B5), Granite (B6), Tin (A6) and an uncharted quarry
-  (A5). Where does marble come from now? (Granite instead, or A5?)
+- Quarries settled (Nov 19): Copper (B5), MARBLE (B6), Tin (A6), and the
+  uncharted A5. GRANITE is a common stone that comes from the Purple
+  Mountains, not a quarry: a quest to dig out a connection to a back room,
+  and the digging yields granite.
 - Purple mountains are to the north-west (E2/F2); the golden-leaf tree for
   Glitter Powder (Discovery spell) lives "up by the purple mountains".
 - How the built maps connect today vs. the grid: built maps join east-west
