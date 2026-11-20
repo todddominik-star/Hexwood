@@ -2,7 +2,7 @@
 // Object "act" functions run at play time and use the G helpers in game.js.
 'use strict';
 
-const VERSION = 'v9';
+const VERSION = 'v10';
 const VILLAGE_NAME = 'Thistledown';
 
 // ---------------------------------------------------------------- items
@@ -49,6 +49,7 @@ const ITEMS = {
   blankbook:  { name: 'Blank Book',    icon: '📓', kind: 'tool',       desc: 'A bound book of empty pages. Someday a spell will fill it.' },
   compass:    { name: 'Brass Compass', icon: '🧭', kind: 'curio',      desc: 'Hidden in the old signpost. It always points toward the Keep.' },
   silvercoin: { name: 'Silver Coin',   icon: '🪙', kind: 'curio',      desc: 'An old coin from the Sunny Lane fountain, stamped with a tower.' },
+  tbutton:    { name: 'Silver T Button', icon: '🔘', kind: 'curio',     desc: 'A silver coat button stamped with a curly "T". The hedgehogs dug it up for you.' },
   locket:     { name: 'Faded Locket',  icon: '📿', kind: 'curio',      desc: 'Inside: a tiny painted portrait, and one word, "Tig".' },
   goblet:     { name: 'Silver Goblet', icon: '🏆', kind: 'curio',      desc: 'From the Keep\'s long dining table. Engraved with the looping knot.' },
   mossnote:   { name: 'Old Moss\'s Note', icon: '📝', kind: 'tool',    desc: '"If you are reading this, the hex has held. I have gone up, toward the roof, to see where it came from. The stairs will not let just anyone pass. Light, warmth and music woke the hall for me... I hope they do for you. - M."' },
@@ -417,6 +418,47 @@ function blankMap(W, H, seed) {
   return { g, set, rect, R, k, keep, scatter, done: () => g.map(r => r.join('')) };
 }
 
+// B4 The Western Side: an open green beside the Keep where visitors once pitched tents.
+// West: the Keep grounds. North: the far side of the Crossroads rockslide. East: the quarry
+// road (overgrown gate). South: down to the Clay Swamp.
+function buildWestSide() {
+  const W = 32, H = 22, M = blankMap(W, H, 113);
+  M.rect(15, 0, 16, 12, '='); M.rect(0, 13, W - 1, 14, '='); M.rect(15, 13, 16, H - 1, '=');
+  for (let y = 0; y < H; y++) { M.keep.add('14,' + y); M.keep.add('17,' + y); }
+  for (let x = 0; x < W; x++) { M.keep.add(x + ',12'); M.keep.add(x + ',15'); }
+  const kr = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) M.keep.add(x + ',' + y); };
+  kr(3, 2, 13, 11); kr(18, 2, 28, 11); kr(3, 16, 13, 20); kr(18, 16, 28, 20);
+  M.scatter(0.1);
+  // a few wildflowers where the visitors' lawns were
+  [[5, 9], [9, 3], [20, 10], [27, 3], [7, 19], [22, 19], [12, 17], [26, 17]].forEach(([x, y]) => M.set(x, y, ':'));
+  M.rect(29, 11, 31, 16, 'T'); M.rect(29, 12, 29, 15, ',');   // the quarry gate stands at x 29
+  return M.done();
+}
+
+// A4 The Clay Swamp: murky water, reeds and boardwalks. Clay pit to the east.
+function buildClaySwamp() {
+  const W = 32, H = 22, M = blankMap(W, H, 131);
+  const blob = (cx, cy, rx, ry, c) => { for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { const d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 + (M.R() - 0.5) * 0.35; if (d < 1) M.set(x, y, c); } };
+  M.rect(1, 1, W - 2, H - 2, 'm');
+  blob(15, 11, 15, 8, ',');                  // drier ground in the middle
+  blob(6, 7, 5, 4, 'W'); blob(25, 6, 5, 3.5, 'W'); blob(8, 17, 6, 3, 'W'); blob(16, 9, 13, 1.6, 'W'); blob(27, 17, 3, 2.5, 'W');
+  // reeds round the water's edges
+  for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) {
+    if (M.g[y][x] === 'W') continue;
+    const wet = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([a, b]) => M.g[y + b] && M.g[y + b][x + a] === 'W');
+    if (wet && M.R() < 0.35) M.set(x, y, 'q');
+  }
+  // the path in from the north, boardwalk across the channel, and a spur east to the clay pit
+  for (let y = 0; y <= 19; y++) for (const x of [15, 16]) M.set(x, y, M.g[y][x] === 'W' ? 'n' : '=');
+  for (let x = 17; x <= 21; x++) M.set(x, 14, M.g[14][x] === 'W' ? 'n' : '=');
+  for (let x = 6; x <= 14; x++) M.set(x, 12, M.g[12][x] === 'W' ? 'n' : '=');
+  M.rect(21, 13, 26, 17, 'm');              // the clay pit's muddy apron
+  M.rect(3, 11, 6, 13, ',');                // little dry spot for the old stone
+  // dead trees and a few willows
+  [[3, 3], [11, 4], [20, 3], [29, 10], [4, 15], [12, 19], [24, 11], [29, 3], [19, 18], [2, 9]].forEach(([x, y]) => { if (M.g[y][x] !== 'W') M.set(x, y, M.R() < 0.6 ? 'K' : 'T'); });
+  return M.done();
+}
+
 // C4 The Crossroads: two roads cross. North: Thistledown. West: Sunny Lane and the Keep.
 // East: the Fairy Woods (veiled). South: the quarry road (rockslide).
 function buildCrossroads() {
@@ -461,6 +503,7 @@ function buildKeepYard() {
   [[24, 7], [25, 7], [26, 7], [24, 8], [25, 8], [26, 8]].forEach(([x, y]) => M.set(x, y, 't'));
   // the Keep's walls keep you from slipping past on the west
   M.rect(1, 12, 6, 20, 'T'); M.rect(7, 20, 22, 21, 'h'); M.rect(23, 17, 28, 21, 'T');
+  M.rect(26, 13, 29, 15, ','); M.rect(26, 14, 29, 14, '=');   // east, to the Western Side
   M.rect(6, 3, 7, 12, 'T'); M.rect(22, 3, 23, 12, 'T'); M.rect(27, 3, 28, 12, 'T');   // no slipping round the sides
   return M.done();
 }
@@ -536,6 +579,8 @@ const ZONES = {
   crossroads: [{ id: 'crossroads', name: 'The Crossroads', rect: [0, 0, 31, 21] }],
   sunnylane: [{ id: 'sunnylane', name: 'Sunny Lane', rect: [0, 0, 31, 21] }],
   keepyard: [{ id: 'keepyard', name: 'The Keep', rect: [0, 0, 29, 23] }],
+  westside: [{ id: 'westside', name: 'The Western Side', rect: [0, 0, 31, 21] }],
+  swamp: [{ id: 'swamp', name: 'The Clay Swamp', rect: [0, 0, 31, 21] }],
   keep: [
     { id: 'k_kitchen',  name: 'The Kitchen',  rect: [0, 0, 10, 8] },
     { id: 'k_dining',   name: 'The Dining Room', rect: [0, 9, 10, 17] },
@@ -784,6 +829,21 @@ const OBJECTS = [
     act: () => G.has('jar') ? (G.count('honey') < G.cap('honey') ? { label: 'Collect honey', fn: () => { G.give('honey'); G.say(['You hold the jar under the hollow. The bees grumble but let you have some. Wildflower honey!']); } } : { label: 'Look at the bee tree', fn: () => G.say(['The bees are busy. You have all the honey you can carry for now.']) })
       : { label: 'Look at the bee tree', fn: () => G.say(['Bees hum in and out of a hollow in the trunk. Golden honey glistens inside.', 'You\'d need a jar to collect any.']) } },
 
+  // ---------- the Western Side (gray for now: what the tents give is still to be decided)
+  { id: 'wrockslide', map: 'westside', tx: 14, ty: 1, tw: 4, th: 2, draw: 'rockslide',
+    act: () => ({ label: 'Look at the rockslide', fn: () => G.say(['The other side of the rockslide that blocks the Crossroads. The road north is buried under boulders.']) }) },
+  ...[[4, 3, 0], [9, 6, 1], [20, 3, 2], [25, 7, 0], [5, 17, 1], [22, 17, 3]].map(([tx, ty, v], i) => ({ id: 'tent' + i, map: 'westside', tx, ty, tw: 3, th: 2, draw: 'tent', v,
+    act: () => ({ label: 'Look at the tent', fn: () => G.say([['A visitors\' tent, its striped canvas torn and gray. One pole still stands.', 'This tent has fallen in completely. Something lumpy is under the canvas.', 'A big pavilion tent, once grand. The flag on top hangs in gray rags.', 'A small tent, pegged down tight. The flap is laced shut from the inside.'][v], '(Todd and Claude are still deciding what the tents hold.)']) }) })),
+  { id: 'firering', map: 'westside', tx: 12, ty: 9, draw: 'firering', act: () => ({ label: 'Look at the fire ring', fn: () => G.say(['A ring of blackened stones. The ashes are cold and gray, and very, very old.']) }) },
+  { id: 'banner', map: 'westside', tx: 18, ty: 9, draw: 'banner', act: () => ({ label: 'Look at the banner pole', fn: () => G.say(['A tall pole with a faded banner. You can just make out the Keep\'s crest: a tower over a wave.']) }) },
+  { id: 'wcrate1', map: 'westside', tx: 8, ty: 9, draw: 'crate', act: () => ({ label: 'Look at the crate', fn: () => G.say(['An old travel crate, nailed shut. Stenciled on the side: "FOR THE GAMES".']) }) },
+  { id: 'wcrate2', map: 'westside', tx: 26, ty: 10, draw: 'crate', act: () => ({ label: 'Look at the crate', fn: () => G.say(['A crate full of gray, crumbly hay.']) }) },
+  { id: 'fox', map: 'westside', tx: 11, ty: 18, draw: 'fox', act: () => ({ label: 'Look at the fox', fn: () => G.say(['A gray fox, curled up asleep in front of a tent, nose tucked under its tail.', 'Its hex feels different from the others: tangled up with the tents somehow. Your un-hex doesn\'t take. Not yet.']) }) },
+  { id: 'quarrygate', map: 'westside', tx: 29, ty: 12, th: 4, draw: 'quarrygate', act: () => ({ label: 'Look at the gate', fn: () => G.say(['A heavy timber gate, chained shut and grown over with hexed ivy. A sign: "COPPER QUARRY - KEEP OUT".']) }) },
+  // ---------- the Clay Swamp
+  { id: 'claypit', map: 'swamp', tx: 22, ty: 13, tw: 4, th: 3, draw: 'claypit', act: () => ({ label: 'Look at the clay pit', fn: () => G.say(['A wide pit of thick, sticky clay, reddish even under the hex. Old shovel marks line the sides.', 'Perfect for bricks or pots... but you\'d need a proper way to dig it out.']) }) },
+  { id: 'swampstone', map: 'swamp', tx: 4, ty: 11, draw: 'swampstone', act: () => ({ label: 'Look at the stone post', fn: () => G.say(['A mossy stone post, half sunk in the mud. Carved on it: an arrow pointing east, and one word: TIN.']) }) },
+  { id: 'oldboat', map: 'swamp', tx: 7, ty: 14, tw: 2, draw: 'boat', act: () => ({ label: 'Look at the boat', fn: () => G.say(['A little flat-bottomed boat, stuck in the reeds. It has a hole you could put your fist through.']) }) },
   // ---------- the Crossroads
   { id: 'signpost4', map: 'crossroads', tx: 17, ty: 8, draw: 'signpost4',
     act: () => F('signpostSolved') ? { label: 'Read the signpost', fn: () => G.say(['North: Thistledown. West: The Keep. East: Fairy Woods. South: The Quarry. All pointing true again.']) }
@@ -794,6 +854,9 @@ const OBJECTS = [
     act: () => ({ label: 'Look at the rockslide', fn: () => G.say(['Boulders have tumbled across the south road toward the quarries. Far too heavy to move by hand.', 'If only there were a way to make heavy things light...']) }) },
   { id: 'xwell', map: 'crossroads', tx: 22, ty: 5, draw: 'well',
     act: () => ({ label: 'Look in the well', fn: () => G.say(['An old travellers\' well. Someone has scratched four arrows into the stone rim: north, east, south and west.']) }) },
+  // ---------- Sunny Lane: the hedgehogs' stash (after the hedgehog chain)
+  { id: 'hstash', map: 'sunnylane', tx: 4, ty: 9, solid: false, layer: 'floor', draw: 'mound', vis: () => F('chainHedge') && !F('hstashDug'),
+    act: () => ({ label: 'Look at the fresh dirt', fn: () => { G.setFlag('hstashDug'); G.give('tbutton'); G.curio('tbutton'); G.give('honey', 1); G.say(['The hedgehogs have dug a neat little hole. At the bottom: a silver coat button, stamped with a curly "T"... and a honeycomb they\'ve politely left for you.']); } }) },
   // ---------- Sunny Lane
   { id: 'fountain', map: 'sunnylane', tx: 20, ty: 14, tw: 2, th: 2, draw: 'fountain', mend: 'fountainMended',
     act: () => F('fountainMended') ? (F('coinTaken') ? { label: 'Look at the fountain', fn: () => G.say(['The fountain splashes happily. Sunny Lane feels sunny again.']) } : { label: 'Look in the basin', fn: () => { G.give('silvercoin'); G.setFlag('coinTaken'); G.curio('silvercoin'); } })
@@ -871,7 +934,12 @@ const CREATURES = [
   { id: 'x_fly',   map: 'crossroads', x: 6.5, y: 15.5, species: 'butterfly', zone: 'crossroads' },
   { id: 's_sq',    map: 'sunnylane', x: 5.5, y: 15.5, species: 'squirrel', zone: 'sunnylane' },
   { id: 's_bird',  map: 'sunnylane', x: 26.5, y: 6.5, species: 'bird', color: '#9a6ad8', zone: 'sunnylane' },
-  { id: 's_hedge', map: 'sunnylane', x: 12.5, y: 17.5, species: 'hedgehog', zone: 'sunnylane' },
+  { id: 's_hedge', map: 'sunnylane', x: 12.5, y: 17.5, species: 'hedgehog', zone: 'sunnylane', reward: { item: 'button', n: 1, text: 'It snuffles, and leaves you a shiny button.' } },
+  { id: 'w_hedge', map: 'westbank', x: 6.5, y: 18.5, species: 'hedgehog', zone: 'westbank', reward: { item: 'button', n: 1, text: 'It snuffles, and leaves you a shiny button.' } },
+  { id: 'm_hedge', map: 'swamp', x: 19.5, y: 5.5, species: 'hedgehog', zone: 'swamp', reward: { item: 'button', n: 1, text: 'It snuffles, and leaves you a shiny button.' } },
+  { id: 'm_frog1', map: 'swamp', x: 18.5, y: 12.5, species: 'frog', zone: 'swamp', reward: { item: 'inkberry', n: 1, text: 'It hops off and leaves an inkberry behind.' } },
+  { id: 'm_frog2', map: 'swamp', x: 11.5, y: 13.5, species: 'frog', zone: 'swamp' },
+  { id: 'm_fly',   map: 'swamp', x: 24.5, y: 10.5, species: 'firefly', zone: 'swamp' },
   { id: 'w_frog1', map: 'westbank', x: 9.5,  y: 8.5,  species: 'frog', zone: 'westbank' },
   { id: 'w_frog2', map: 'westbank', x: 20.5, y: 9.5,  species: 'frog', zone: 'westbank' },
   { id: 'w_frog3', map: 'westbank', x: 12.5, y: 15.3, species: 'frog', zone: 'westbank' },
@@ -888,6 +956,7 @@ const RESIDENTS = [
   { id: 'marigold', map: 'village', x: 16.6, y: 5.7, species: 'goose', when: () => G.flag('paperLit') },
   { id: 'tilly',  map: 'village', x: 30.4, y: 12.7, species: 'mouse', when: () => G.flag('craftsOpen') },
   { id: 'rufus',  map: 'village', x: 26.4, y: 12.6, species: 'raccoon', when: () => G.flag('leatherMended') },
+  ...[[3.2, 10.3], [4.6, 10.6], [5.6, 9.6], [3.6, 8.6]].map(([x, y], i) => ({ id: 'hh' + i, map: 'sunnylane', x, y, species: 'hedgehog', when: () => G.flag('chainHedge') })),
   // squirrels and chipmunks live INSIDE their cottages now (they peek out of the windows)
   ...[['#5b8fe0', 7.8], ['#e0574f', 8.6], ['#f0c43a', 7.2]].map(([c, x], i) => ({ id: 'bird' + i, map: 'village', x, y: 5.3 + i * 0.15, species: 'bird', color: c, when: () => G.flag('chainBird') })),
 ];
@@ -897,6 +966,7 @@ const FREE_ALL_ZONES = ['yard', 'meadow', 'brook', 'road', 'village', 'westbank'
 
 const CLUES = {
   frogs: 'Four voices in the reeds. When the frogs sing together, the pond remembers its old stepping stones.',
+  hedgehogs: 'Four prickly friends, four shiny buttons. They\'ve gathered on Sunny Lane, west of the old road, sniffing at something under the grass.',
   birds: 'Three voices, one song. Beside the owl\'s silent door, the brambles hide what an old friend left behind. A sharp blade and a gentle hand.',
   chipmunks: 'Six small friends remember the way. Where three birches lean together in the dark grove, the hedge is only pretending. Look with a seeing eye.',
 };

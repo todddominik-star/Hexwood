@@ -1,6 +1,6 @@
 // Hexwood service worker: lets the game install and open offline.
 // Network first, so new versions show up right away; the cache is the fallback.
-const CACHE = 'hexwood-cache-v9';
+const CACHE = 'hexwood-cache-v10';
 const FILES = ['./', './index.html', './js/data.js', './js/art.js', './js/game.js', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); });
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));

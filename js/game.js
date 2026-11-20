@@ -23,8 +23,8 @@ const vnoise = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), fx = x 
   return a + (b - a) * sx + (c - a) * sy + (a - b - c + d) * sx * sy; };
 
 // ================================================================ maps
-const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't', 'P', 'L', 'S']);
-const OUTDOOR = ['out', 'road', 'village', 'westbank', 'crossroads', 'sunnylane', 'keepyard'];
+const SOLID_TILES = new Set(['#', 'w', 'D', 'T', 'B', 'b', 'R', 'h', 'O', 'H', '~', 'x', 'K', 't', 'P', 'L', 'S', 'W', 'q']);
+const OUTDOOR = ['out', 'road', 'village', 'westbank', 'crossroads', 'sunnylane', 'keepyard', 'westside', 'swamp'];
 const MAPS = {};
 function addMap(id, rows, dark) {
   MAPS[id] = { id, rows: rows.map(r => r.split('')), w: rows[0].length, h: rows.length, objs: OBJECTS.filter(o => o.map === id), solid: null };
@@ -41,6 +41,8 @@ addMap('crossroads', buildCrossroads());
 addMap('sunnylane', buildSunnyLane());
 addMap('keepyard', buildKeepYard());
 addMap('keep', KEEP_MAP);
+addMap('westside', buildWestSide());
+addMap('swamp', buildClaySwamp());
 
 // ================================================================ state
 const SAVE_KEY = 'hexwood_save_v1';  // v2 keeps the same save slot
@@ -97,7 +99,8 @@ const G = {
   },
   goMap(map, x, y) {
     startFade(() => { S.map = map; S.px = x; S.py = y; curZone = null; if (!OUTDOOR.includes(map)) { S.fairyOut = false; fairyRT = null; } else if (fairyRT) { fairyRT = { x: x - 0.8, y: y - 0.8 }; }
-      if (!S.visited[map]) { S.visited[map] = true; if (map === 'village') setTimeout(() => notice(`🏘️ Welcome to ${VILLAGE_NAME}. Every house is gray and hexed... but you can help.`), 1200); } spawnCreatures(); save(); });
+      if (!S.visited[map]) { S.visited[map] = true; if (map === 'village') setTimeout(() => notice(`🏘️ Welcome to ${VILLAGE_NAME}. Every house is gray and hexed... but you can help.`), 1200);
+        if (map === 'westside' || map === 'swamp') setTimeout(() => notice('🚧 This area is still being designed. Walk around and look, but it can\'t be restored yet.'), 1200); } spawnCreatures(); save(); });
   },
   freeFairy() {
     G.setFlag('fairyFree');
@@ -200,7 +203,7 @@ const G = {
 };
 
 // ================================================================ zones
-function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank, ZONES.library, ZONES.crossroads, ZONES.sunnylane, ZONES.keepyard, ZONES.keep); }
+function allZones() { return [].concat(ZONES.hut, ZONES.cellar, ZONES.out, ZONES.road, ZONES.village, ZONES.westbank, ZONES.library, ZONES.crossroads, ZONES.sunnylane, ZONES.keepyard, ZONES.keep, ZONES.westside, ZONES.swamp); }
 function zoneAt(map, x, y) {
   const list = ZONES[map];
   for (const z of list) { const r = z.rect; if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return z; }
@@ -290,7 +293,8 @@ function spawnCreatures() {
       c.hx = c.x = 2.6 + (i % 3) * 1.4; c.hy = c.y = 2.6 + Math.floor(i / 3) * 1.6;
     }
     if (d.lead && S.freed[d.id] && !G.flag(d.lead.flag)) { c.mode = 'lead'; }
-    if (d.species === 'bird' && G.flag('chainBird')) c.gone = true;
+    if (d.species === 'bird' && d.map === 'village' && G.flag('chainBird')) c.gone = true;
+    if (d.species === 'hedgehog' && G.flag('chainHedge')) c.gone = true;
     if (d.species === 'frog' && d.map === 'westbank' && G.flag('frogsSang')) { const i = ['w_frog1', 'w_frog2', 'w_frog3', 'w_frog4'].indexOf(d.id); c.x = c.hx = 10.5 + i; c.y = c.hy = 10.5; }   // the songbirds now live by the library
     return c;
   });
@@ -330,7 +334,13 @@ function unhex(c) {
   if (!G.flag('chainChip') && chips.every(k => S.freed[k.id])) setTimeout(startChain, 900);
   const frogs = CREATURES.filter(k => k.map === 'westbank' && k.species === 'frog');
   if (!G.flag('frogsSang') && d.map === 'westbank' && d.species === 'frog' && frogs.every(k => S.freed[k.id])) setTimeout(startFrogChain, 900);
-  const birds = CREATURES.filter(k => k.species === 'bird');
+  const hogs = CREATURES.filter(k => k.species === 'hedgehog');
+  if (!G.flag('chainHedge') && d.species === 'hedgehog' && hogs.every(k => S.freed[k.id])) setTimeout(() => {
+    S.flags.chainHedge = true; save(); addClue('hedgehogs'); chime(4);
+    notice('🦔 Far off, four hedgehogs sneeze at once. They\'re heading somewhere together... a new clue is in your Journal.', 'journal');
+    creatures.filter(c => c.def.species === 'hedgehog').forEach(c => { c.gone = true; burst(c.x, c.y, '#fff6c8', 12); });
+  }, 900);
+  const birds = CREATURES.filter(k => k.species === 'bird' && k.map === 'village');
   if (!G.flag('chainBird') && d.species === 'bird' && birds.every(k => S.freed[k.id])) setTimeout(startBirdChain, 900);
 }
 
@@ -867,7 +877,7 @@ function smartHint() {
   if (F('leatherMended') && !F('bigPouch') && G.count('fungus') < 3) T.push({ map: 'road', x: 5.5, y: 4.5, text: 'Rufus needs tinder fungus. Shelf mushrooms grow on the dead trees.' });
   if (F('frogsSang') && (!F('islandWisp') || !F('pearlTaken'))) at('islandwisp', 'The frogs\' clue... lily pads in the pond. Hop across to the island!');
   // never point at places you can't reach yet
-  const reachable = (m) => m === null || (m !== 'westbank' || F('bridgeMended')) && (m !== 'keep' || F('keepOpen')) && (!['crossroads', 'sunnylane', 'keepyard'].includes(m) || S.visited[m]);
+  const reachable = (m) => m === null || (m !== 'westbank' || F('bridgeMended')) && (m !== 'keep' || F('keepOpen')) && (!['crossroads', 'sunnylane', 'keepyard', 'westside', 'swamp'].includes(m) || S.visited[m]);
   for (let i = T.length - 1; i >= 0; i--) if (!reachable(T[i].map)) T.splice(i, 1);
   if (S.visited.village && !F('libOpen')) at('library', 'The Owl\'s Library door has a picture puzzle on it. Swap the little squares until the picture is whole.');
   if (S.visited.village && !F('craftsDoor')) at('crafts', 'The craft shop\'s lock is a puzzle of rings and rods. Turn the tiles until every line connects.');
@@ -876,6 +886,7 @@ function smartHint() {
   if (has('jar') && !has('honey') && F('bridgeMended')) at('beetree', 'There\'s a bee tree in Willow Bend. With a jar, you could collect honey.');
   if (F('libOpen') && Object.keys(S.booksSeen).length < 4) at('shelf1', 'Have you looked at the books in the Owl\'s Library?');
   if (F('craftsOpen') && !S.visited.crossroads) T.push({ map: 'village', x: 20, y: 26.5, text: 'The road south of town, past the bridge, goes down to the old Crossroads.' });
+  if (F('chainHedge') && !F('hstashDug')) at('hstash', 'The hedgehogs are all sniffing at one spot on Sunny Lane. Go and see!');
   if (S.visited.crossroads && !F('signpostSolved')) at('signpost4', 'That signpost at the Crossroads is all spun around. Something rattles inside it. Point each arm the right way!');
   if (S.visited.sunnylane && !F('fountainMended')) at('fountain', 'The fountain on Sunny Lane is cracked. Mend Powder would fix it.');
   if (S.visited.keepyard && !F('keepOpen')) {
@@ -1606,6 +1617,8 @@ const EXITS = [
   ['crossroads', 'W', 0, 99, 'sunnylane', -0.9, 11.5], ['sunnylane', 'E', 0, 99, 'crossroads', 0.9, 10.5],
   ['westbank', 'S', 10, 15, 'sunnylane', 8.5, 0.9], ['sunnylane', 'N', 6, 11, 'westbank', 12.5, -0.9],
   ['sunnylane', 'S', 13, 18, 'keepyard', 15.5, 0.9], ['keepyard', 'N', 13, 18, 'sunnylane', 15.5, -0.9],
+  ['keepyard', 'E', 12, 16, 'westside', 0.9, 13.5], ['westside', 'W', 11, 16, 'keepyard', -0.9, 14.5],
+  ['westside', 'S', 13, 18, 'swamp', 15.5, 0.9], ['swamp', 'N', 13, 18, 'westside', 15.5, -0.9],
 ];
 function edgeExits() {
   if (fadeDir || paused) return;
@@ -1846,6 +1859,31 @@ function drawTile(m, tx, ty, x, y, g, t) {
       ctx.strokeStyle = C('#6f6a78', g); ctx.lineWidth = 1.5;
       for (let r = 0; r < 3; r++) { const yy = y + r * TS / 3; ctx.beginPath(); ctx.moveTo(x, yy); ctx.lineTo(x + TS, yy); ctx.stroke(); const off = (r + tx) % 2 ? TS / 2 : 0; ctx.beginPath(); ctx.moveTo(x + off + TS / 4, yy); ctx.lineTo(x + off + TS / 4, yy + TS / 3); ctx.stroke(); }
       if (m.rows[ty + 1] && m.rows[ty + 1][tx] !== 'S') { ctx.fillStyle = C('#6f6a78', g); ctx.fillRect(x, y + TS - 5, TS + 1, 5); }
+      break;
+    }
+    case 'm': {
+      ctx.fillStyle = C('#7d6e4a', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      const h = hash(tx, ty); ctx.fillStyle = C('#6a5c3c', g);
+      for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.ellipse(x + TS * hash(tx + i, ty), y + TS * hash(ty, tx + i), TS * 0.16, TS * 0.07, 0, 0, 7); ctx.fill(); }
+      if (h > 0.6) { ctx.fillStyle = C('#8fa35a', g); ctx.beginPath(); ctx.ellipse(x + TS * 0.7, y + TS * 0.3, TS * 0.12, TS * 0.05, 0, 0, 7); ctx.fill(); }
+      break;
+    }
+    case 'W': {
+      ctx.fillStyle = C('#4f6b52', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.strokeStyle = C('#6f8f6a', g); ctx.lineWidth = 2;
+      const off = Math.sin(t * 0.8 + tx * 0.7 + ty) * TS * 0.06;
+      ctx.beginPath(); ctx.moveTo(x + TS * 0.15, y + TS * 0.4 + off); ctx.quadraticCurveTo(x + TS * 0.4, y + TS * 0.32 + off, x + TS * 0.6, y + TS * 0.4 + off); ctx.stroke();
+      if (hash(tx * 3, ty) > 0.7) { ctx.fillStyle = C('#7aa860', g); ctx.beginPath(); ctx.arc(x + TS * 0.65, y + TS * 0.7, TS * 0.14, 0.4, 6); ctx.lineTo(x + TS * 0.65, y + TS * 0.7); ctx.fill(); }
+      if (hash(tx, ty * 5) > 0.85) { const k = (t * 0.6 + hash(tx, ty)) % 1; ctx.fillStyle = `rgba(200,220,190,${0.6 * (1 - k)})`; circ(x + TS * 0.3, y + TS * (0.8 - k * 0.3), 2 + k * 2); ctx.fill(); }
+      break;
+    }
+    case 'q': {
+      ctx.fillStyle = C('#7d6e4a', g); ctx.fillRect(x, y, TS + 1, TS + 1);
+      ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      for (let i = 0; i < 7; i++) { const bx = x + TS * (0.12 + i * 0.12), sw = Math.sin(t * 1.2 + i + tx) * TS * 0.04;
+        ctx.strokeStyle = C(i % 2 ? '#6f8f3a' : '#8aa648', g); ctx.beginPath(); ctx.moveTo(bx, y + TS); ctx.quadraticCurveTo(bx + sw, y + TS * 0.5, bx + sw * 2, y + TS * (0.05 + hash(i, tx) * 0.2)); ctx.stroke();
+        if (i % 3 === 1) { ctx.fillStyle = C('#6b4a2a', g); rr(bx + sw * 2 - 2.5, y + TS * 0.12, 5, TS * 0.22, 2.5); ctx.fill(); } }
+      ctx.lineCap = 'butt';
       break;
     }
     case '_': {
@@ -2261,6 +2299,80 @@ const DRAW = {
     ctx.fillStyle = '#3a2416'; ctx.beginPath(); ctx.ellipse(x + w * 0.52, y + h * 0.15, w * 0.1, h * 0.14, 0, 0, 7); ctx.fill();
     ctx.fillStyle = '#e8b84a'; ctx.beginPath(); ctx.ellipse(x + w * 0.52, y + h * 0.2, w * 0.06, h * 0.06, 0, 0, 7); ctx.fill();
     for (let i = 0; i < 4; i++) { const a = t * 3 + i * 1.6; const bx = x + w * 0.52 + Math.cos(a) * w * 0.35, by = y + h * 0.1 + Math.sin(a * 1.3) * h * 0.25; ctx.fillStyle = '#f0c43a'; circ(bx, by, 2.5); ctx.fill(); ctx.fillStyle = '#222'; ctx.fillRect(bx - 1, by - 2.5, 1.5, 5); }
+  },
+  tent(o, x, y, w, h, g) {
+    const v = o.v, stripe = ['#c8574a', '#4a7ac8', '#d8a83a', '#5a9a5a'][v];
+    ctx.fillStyle = 'rgba(30,40,20,0.25)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.92, w * 0.5, h * 0.12, 0, 0, 7); ctx.fill();
+    if (v === 1) {   // collapsed
+      ctx.fillStyle = C('#e8dcc0', g); ctx.beginPath(); ctx.moveTo(x + w * 0.05, y + h * 0.9); ctx.quadraticCurveTo(x + w * 0.3, y + h * 0.2, x + w * 0.55, y + h * 0.55); ctx.quadraticCurveTo(x + w * 0.8, y + h * 0.3, x + w * 0.95, y + h * 0.9); ctx.fill();
+      ctx.strokeStyle = C(stripe, g); ctx.lineWidth = 6; for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.moveTo(x + w * (0.2 + i * 0.25), y + h * 0.85); ctx.lineTo(x + w * (0.28 + i * 0.25), y + h * 0.45); ctx.stroke(); }
+      ctx.strokeStyle = C('#6a4a32', g); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + w * 0.6, y + h * 0.6); ctx.lineTo(x + w * 0.9, y + h * 0.15); ctx.stroke();
+      return;
+    }
+    const top = v === 2 ? y - h * 1.1 : y - h * 0.6;
+    ctx.fillStyle = C('#e8dcc0', g); ctx.beginPath(); ctx.moveTo(x + w / 2, top); ctx.lineTo(x + w * 0.98, y + h * 0.9); ctx.lineTo(x + w * 0.02, y + h * 0.9); ctx.fill();
+    ctx.save(); ctx.clip(); ctx.fillStyle = C(stripe, g);
+    for (let i = -3; i < 8; i++) { ctx.beginPath(); ctx.moveTo(x + w / 2, top); ctx.lineTo(x + w * (0.02 + i * 0.16), y + h * 0.9); ctx.lineTo(x + w * (0.1 + i * 0.16), y + h * 0.9); ctx.fill(); }
+    ctx.restore();
+    ctx.fillStyle = '#3a2e28'; ctx.beginPath(); ctx.moveTo(x + w / 2, y + h * 0.15); ctx.lineTo(x + w * 0.62, y + h * 0.9); ctx.lineTo(x + w * 0.38, y + h * 0.9); ctx.fill();
+    if (v === 0) { ctx.fillStyle = C('#d9cba8', g); ctx.beginPath(); ctx.moveTo(x + w * 0.62, y + h * 0.2); ctx.lineTo(x + w * 0.9, y + h * 0.5); ctx.lineTo(x + w * 0.7, y + h * 0.6); ctx.fill(); }
+    if (v === 3) { ctx.strokeStyle = C('#8a6a40', g); ctx.lineWidth = 1.5; for (let i = 0; i < 4; i++) { const yy = y + h * (0.35 + i * 0.13); ctx.beginPath(); ctx.moveTo(x + w * 0.46, yy); ctx.lineTo(x + w * 0.54, yy + h * 0.06); ctx.moveTo(x + w * 0.54, yy); ctx.lineTo(x + w * 0.46, yy + h * 0.06); ctx.stroke(); } }
+    ctx.fillStyle = C('#6a4a32', g); ctx.fillRect(x + w / 2 - 2, top - h * 0.3, 4, h * 0.32);
+    if (v === 2) { ctx.fillStyle = C('#8f8a96', g); ctx.beginPath(); ctx.moveTo(x + w / 2 + 2, top - h * 0.3); ctx.lineTo(x + w / 2 + w * 0.15, top - h * 0.24); ctx.lineTo(x + w / 2 + 2, top - h * 0.16); ctx.fill(); }
+  },
+  firering(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#3a3430', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w * 0.32, h * 0.22, 0, 0, 7); ctx.fill();
+    for (let i = 0; i < 9; i++) { const a = i * 0.7; ctx.fillStyle = C(i % 2 ? '#8f8a86' : '#a8a29a', g); circ(x + w / 2 + Math.cos(a) * w * 0.38, y + h / 2 + Math.sin(a) * h * 0.28, w * 0.09); ctx.fill(); }
+  },
+  banner(o, x, y, w, h, g, t) {
+    ctx.fillStyle = C('#6a4a32', g); ctx.fillRect(x + w * 0.45, y - h * 1.6, w * 0.1, h * 2.5);
+    const sw = Math.sin(t * 1.3) * 4;
+    ctx.fillStyle = C('#6b5a8a', g); ctx.beginPath(); ctx.moveTo(x + w * 0.55, y - h * 1.5); ctx.lineTo(x + w * 1.2 + sw, y - h * 1.45); ctx.lineTo(x + w * 1.1 + sw, y - h * 1.1); ctx.lineTo(x + w * 1.2 + sw, y - h * 0.75); ctx.lineTo(x + w * 0.55, y - h * 0.8); ctx.fill();
+    ctx.fillStyle = C('#d8c070', g); ctx.fillRect(x + w * 0.75 + sw / 2, y - h * 1.35, w * 0.12, h * 0.3);
+  },
+  fox(o, x, y, w, h, g, t) {
+    const br = 1 + Math.sin(t * 1.5) * 0.03;
+    ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.75, w * 0.4, h * 0.12, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#d07a3a', 1); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.55, w * 0.32 * br, h * 0.22 * br, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(x + w * 0.3, y + h * 0.62, w * 0.28, h * 0.12, 0.3, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#f2ede4', 1); ctx.beginPath(); ctx.ellipse(x + w * 0.12, y + h * 0.66, w * 0.08, h * 0.07, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#d07a3a', 1); ctx.beginPath(); ctx.ellipse(x + w * 0.66, y + h * 0.48, w * 0.13, h * 0.11, 0, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + w * 0.62, y + h * 0.4); ctx.lineTo(x + w * 0.64, y + h * 0.26); ctx.lineTo(x + w * 0.7, y + h * 0.38); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x + w * 0.7, y + h * 0.4); ctx.lineTo(x + w * 0.75, y + h * 0.27); ctx.lineTo(x + w * 0.78, y + h * 0.42); ctx.fill();
+    ctx.strokeStyle = '#333'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x + w * 0.69, y + h * 0.48, 2.5, 0.2, 2.9); ctx.stroke();
+    for (let i = 0; i < 3; i++) { const k = (t * 0.3 + i / 3) % 1; ctx.fillStyle = `rgba(90,90,110,${0.7 * (1 - k)})`; ctx.font = `${Math.round(TS * (0.14 + k * 0.08))}px Georgia`; ctx.textAlign = 'center'; ctx.fillText('z', x + w * (0.8 + k * 0.2), y + h * (0.3 - k * 0.5)); }
+  },
+  quarrygate(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#5f412d', g); ctx.fillRect(x + w * 0.1, y - h * 0.1, w * 0.18, h * 1.08); ctx.fillRect(x + w * 0.72, y - h * 0.1, w * 0.18, h * 1.08);
+    for (let i = 0; i < 6; i++) { ctx.fillStyle = C(i % 2 ? '#7a543b' : '#8a6448', g); ctx.fillRect(x + w * 0.2, y + h * (0.05 + i * 0.15), w * 0.6, h * 0.12); }
+    ctx.strokeStyle = C('#8f8a96', g); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x + w * 0.2, y + h * 0.4); ctx.lineTo(x + w * 0.8, y + h * 0.6); ctx.moveTo(x + w * 0.2, y + h * 0.6); ctx.lineTo(x + w * 0.8, y + h * 0.4); ctx.stroke();
+    ctx.fillStyle = '#4a6a42'; for (let i = 0; i < 22; i++) { ctx.beginPath(); ctx.ellipse(x + w * hash(i, 7), y + h * hash(3, i), 5, 3, i, 0, 7); ctx.fill(); }
+    ctx.fillStyle = C('#e8dcc0', g); rr(x - w * 0.6, y + h * 0.3, w * 0.6, h * 0.14, 3); ctx.fill();
+    ctx.fillStyle = '#5a3a2a'; ctx.font = `bold ${Math.round(TS * 0.15)}px Georgia`; ctx.textAlign = 'center'; ctx.fillText('QUARRY', x - w * 0.3, y + h * 0.4);
+  },
+  claypit(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#5e4a36', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h / 2, w * 0.48, h * 0.44, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#b06a4a', g * 0.6); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.55, w * 0.4, h * 0.34, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = C('#8a4f36', g * 0.6); ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.arc(x + w * (0.25 + hash(i, 2) * 0.5), y + h * (0.35 + hash(2, i) * 0.4), TS * 0.15, 0.3, 2.6); ctx.stroke(); }
+    ctx.fillStyle = C('#6a4a32', g); ctx.save(); ctx.translate(x + w * 0.85, y + h * 0.2); ctx.rotate(0.5); ctx.fillRect(-2, -h * 0.4, 4, h * 0.5); ctx.fillStyle = C('#8f8a96', g); ctx.fillRect(-7, h * 0.1, 14, 10); ctx.restore();
+  },
+  swampstone(o, x, y, w, h, g) {
+    ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.9, w * 0.3, h * 0.08, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#9a9690', g); rr(x + w * 0.3, y - h * 0.3, w * 0.4, h * 1.15, 6); ctx.fill();
+    ctx.fillStyle = C('#6f9a4a', g); ctx.beginPath(); ctx.ellipse(x + w * 0.4, y - h * 0.2, w * 0.14, h * 0.1, 0.4, 0, 7); ctx.fill(); ctx.beginPath(); ctx.ellipse(x + w * 0.6, y + h * 0.5, w * 0.1, h * 0.14, 0, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#4a4440'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + w * 0.4, y + h * 0.1); ctx.lineTo(x + w * 0.6, y + h * 0.1); ctx.lineTo(x + w * 0.54, y + h * 0.03); ctx.moveTo(x + w * 0.6, y + h * 0.1); ctx.lineTo(x + w * 0.54, y + h * 0.17); ctx.stroke();
+  },
+  boat(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#6a4a32', g); ctx.beginPath(); ctx.moveTo(x + w * 0.02, y + h * 0.3); ctx.lineTo(x + w * 0.98, y + h * 0.25); ctx.lineTo(x + w * 0.85, y + h * 0.8); ctx.lineTo(x + w * 0.12, y + h * 0.82); ctx.fill();
+    ctx.fillStyle = C('#8a6448', g); ctx.fillRect(x + w * 0.1, y + h * 0.32, w * 0.78, h * 0.4);
+    ctx.fillStyle = C('#4f6b52', g); ctx.beginPath(); ctx.ellipse(x + w * 0.6, y + h * 0.52, w * 0.1, h * 0.14, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#6a4a32', g); ctx.fillRect(x + w * 0.3, y + h * 0.3, w * 0.06, h * 0.45);
+  },
+  mound(o, x, y, w, h, g) {
+    ctx.fillStyle = C('#6a5038', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.6, w * 0.4, h * 0.22, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = C('#4a3828', g); ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * 0.58, w * 0.18, h * 0.1, 0, 0, 7); ctx.fill();
+    if (Math.sin(Date.now() / 300) > 0.4) star(x + w * 0.55, y + h * 0.55, TS * 0.07, 'rgba(255,255,230,0.9)');
   },
   signpost4(o, x, y, w, h, g) {
     const ok = G.flag('signpostSolved');

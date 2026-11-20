@@ -5,7 +5,7 @@ Todd: add your own notes anywhere (the TODD'S NOTES section at the bottom is
 a good spot), commit, and Claude will read them at the start of the next chat.
 
 Started: Nov 12, 2026
-Current version: v9 (Nov 19, 2026)
+Current version: v10 (Nov 19, 2026)
 Play link (once GitHub Pages is on): https://todddominik-star.github.io/Hexwood/
 
 
@@ -492,6 +492,39 @@ NEEDS DESIGN NEXT (Todd to journal):
     formula waiting yet.
 
 
+v10 CHANGES (Nov 19, late)
+--------------------------
+Two new areas to WALK, not finish. Both stay gray for now and show a
+"still being designed" note on the first visit. Walk them for ideas.
+
+THE WESTERN SIDE (B4): reached from the Keep grounds, past the cut
+brambles, east along the path. An open green where visitors camped:
+six tents (torn, collapsed, a grand pavilion, one laced shut from the
+inside), a cold fire ring, a banner pole with the Keep's crest (a tower
+over a wave), crates ("FOR THE GAMES"). A gray FOX sleeps in front of a
+tent; its hex is "tangled up with the tents" and won't lift yet.
+North: the far side of the Crossroads rockslide. East: the Copper Quarry
+gate, chained and overgrown. South: down to the swamp.
+  TO DECIDE: what the tents give (an item like a brass wheel? a new
+  resident like the fox?), and what lifts the fox's hex.
+
+THE CLAY SWAMP (A4): murky water, reeds, dead trees, a boardwalk across
+the channel. A CLAY PIT to the east (look only: "you'd need a proper way
+to dig it out"). A mossy stone post on the west: an arrow east and the
+word TIN (the Tin Quarry is that way). A holed little boat in the reeds.
+Frogs, a firefly and a hedgehog to un-hex.
+  TO DECIDE: how digging works (a tool, a spell, or both), and what
+  restores the swamp.
+
+HEDGEHOG CHAIN (secret, 4th chain): free the four hedgehogs (Crossroads,
+Sunny Lane, Willow Bend, Clay Swamp). Each gives a button. When the last
+is free they gather on Sunny Lane and dig up a SILVER "T" BUTTON curio
+(and a honeycomb). Another Tig thread, with the locket.
+
+Fix: the purple songbird on Sunny Lane no longer counts toward (or
+vanishes with) Thistledown's songbird chain.
+
+
 v9 CHANGES (Nov 19)
 -------------------
 Map: the river now runs across the top of Willow Bend (west to east) and
@@ -543,6 +576,10 @@ enchanted and placed, it becomes a passage into the lower mountains.
 Later: a marble ALTAR, enchanted and set in the middle of the Old Stones
 ring ("that ring is begging for something"). Then something new and
 powerful: cast there, assemble there, divination, or a portal.
+
+Todd's answers (Nov 19): carrying doesn't slow you down, but you can't cast
+anything else until you set the thing down. Logs stay put for now: we
+open them up when the Lowlands and the mill's carvings are designed.
 
 Claude's thoughts on the bigger picture (for Todd to react to):
   - This is a strong spine for the middle of the game: "make the world's
@@ -643,6 +680,8 @@ SESSION LOG
   /17       shop, bee tree, world map grid.
 2026-11-19  v9: river + roads, Crossroads, Sunny Lane, the Keep grounds and
             ground floor, pipe animation, satchel. Idea bank, Carry ideas.
+            v10: Western Side and Clay Swamp (walkable, gray), hedgehog
+            chain. Carry: no slowdown, blocks other spells while held.
 
 
 TODD'S NOTES
